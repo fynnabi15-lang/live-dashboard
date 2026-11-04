@@ -1,20 +1,28 @@
-<!doctype html><html lang="de"><head><link rel="icon" href="data:,"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Live Trading Dashboard</title><link rel="stylesheet" href="style.css"></head><body>
-<aside class="side"><div class="brand">📊 Live Dashboard</div>
-<nav><a href="#overview">📊 Übersicht</a><a href="#assets">💰 Bestände</a><a href="#tx">📋 Transaktionen</a><a href="#alloc">📈 Verteilung</a><a href="#perf">🎯 Performance</a><a href="#system">⚙️ System</a></nav>
-<div class="snap card"><div class="lbl">Portfolio</div><div id="snapTotal" class="mono big">–</div><div id="snapChg" class="mono">–</div><div id="snapLinks" class="small"></div></div></aside>
-<main><header><div><span id="liveDot" class="dot"></span> <span id="liveTxt">verbinde…</span></div><div id="srcStatus" class="srcs"></div><div id="clock" class="mono"></div></header>
-<div class="grid">
-<section class="col-main">
-<div id="overview" class="card hero"><div class="lbl">Gesamt-Portfolio-Wert</div><div id="total" class="mono huge">–</div><div id="chg" class="mono">–</div><div class="small sec">Wallets + Hyperliquid-Konto, live im Browser bewertet. Nur Lesezugriff. Bot-Daten Stand: <span id="snapAt">–</span></div></div>
-<div class="card"><div class="row"><b>SOL/USD live (1-s-Ticks)</b><div class="seg" id="tf"><button data-s="60">1m</button><button data-s="300" class="on">5m</button><button data-s="900">15m</button><button data-s="3600">1h</button><button data-s="0">Alles</button></div></div><canvas id="chart" height="300"></canvas><div class="small sec">Verlauf wird ab Öffnen der Seite aufgebaut.</div></div>
-<div id="assets" class="card"><b>Bestände</b><table id="assetTbl"><thead><tr><th>Asset</th><th>Wallet</th><th>Preis</th><th>24h</th><th>Menge</th><th>Wert</th></tr></thead><tbody></tbody></table></div>
-<div class="card"><b>Offene Positionen</b><div id="positions"></div></div>
-<div id="tx" class="card"><div class="row"><b>Transaktionen</b><div class="seg" id="txf"><button data-f="all" class="on">Alle</button><button data-f="trade">Trades</button><button data-f="dep">Einzahlungen</button><button data-f="chain">On-chain</button></div></div>
-<table id="txTbl"><thead><tr><th data-k="time">Zeit ▾</th><th data-k="type">Typ</th><th data-k="asset">Asset</th><th>Menge</th><th>Gegenwert</th><th data-k="result">Ergebnis</th></tr></thead><tbody></tbody></table></div>
-<div class="two"><div id="alloc" class="card"><b>Verteilung</b><canvas id="donut" width="260" height="260"></canvas><div id="allocLeg" class="small"></div></div>
-<div id="perf" class="card"><b>Performance</b><div class="small sec">Nur echte, abgeschlossene Trades (Steuer-Ledger, FIFO vorläufig)</div><div id="perfBox" class="kv"></div></div></div>
-<div id="system" class="card"><b>System &amp; Bots</b><div id="sysBox"></div></div>
-</section>
-<section class="col-right"><div class="card"><b>Top-Assets</b><div id="top"></div></div><div class="card"><b>Alerts</b><div id="alerts"></div></div><div class="card"><b>Letzte Signale</b><div id="signals" class="small"></div></div></section>
-</div></main><script src="app.js"></script></body></html>
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><title>Bot-Cockpit · Live</title><link rel="stylesheet" href="style.css"></head><body>
+<div class="app">
+<aside class="side">
+ <div class="brand"><span class="logo">◆</span> Bot-Cockpit <span id="mode" class="chip"></span></div>
+ <nav><a href="#hero" class="on">Übersicht</a><a href="#feedBox">Signale</a><a href="#posBox">Positionen</a><a href="#walletBox">Wallets</a><a href="#pipe">Risk Guard</a></nav>
+ <div class="h">AGENTEN</div><div id="agents"></div>
+ <div id="walletBox" class="wallet"><div class="sec">Haupt-Wallet</div><div id="mainSol" class="big mono">–</div><div id="mainUsd" class="sec mono"></div><div id="wallets" class="sec small"></div></div>
+</aside>
+<main>
+ <header><div class="tick"><div id="ticker" class="track"></div></div><div class="live"><span class="dot" id="liveDot"></span><span id="liveTxt">verbinde…</span></div></header>
+ <section class="grid1">
+  <div id="hero" class="card hero">
+   <div class="sec">Equity <span class="small">· Wallets (SOL + Token) + Hyperliquid, live</span></div>
+   <div class="eq"><span id="total" class="mono">–</span><span id="chg" class="mono"></span></div>
+   <canvas id="chart"></canvas>
+   <div class="stats" id="heroStats"></div>
+  </div>
+  <div id="feedBox" class="card feed"><div class="ch">Live-Aktivität <span class="sec small" id="snapAt"></span></div><div id="feed"></div></div>
+ </section>
+ <section id="pipe" class="pipe"></section>
+ <section class="grid3">
+  <div id="posBox" class="card"><div class="ch">Positionen</div><div id="positions"></div><div class="ch2">Beobachtete Coins <span class="sec small">live via DexScreener</span></div><table id="watch"></table></div>
+  <div class="card" id="pnlCard"><div class="ch">PnL nach Token <span class="sec small">realisiert, €</span></div><div id="heat" class="heat"></div></div>
+  <div class="card"><div class="ch">Bot-Log</div><pre id="log" class="log"></pre></div>
+ </section>
+ <footer class="sec small">Nur Lesen · keine Trade-Funktionen · Preise: Binance, Jupiter, DexScreener · Chain: Solana RPC · Perps: Hyperliquid · <span id="srcStatus"></span></footer>
+</main></div>
+<script src="app.js"></script></body></html>
