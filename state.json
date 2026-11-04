@@ -1,0 +1,346 @@
+{
+ "generatedAt": "2026-11-04T21:55:46.603Z",
+ "trades": [
+  {
+   "sig": "24efYJ8Png5KGdx4Jxe1upLFiyMtCBW2QyShzsmYHKpvCTRgKfCQuvyw37jNTZ4nX5WudfjuUEL9fDBVr7BfaFB3",
+   "time": 1793656228000,
+   "type": "EXTERNAL_DEPOSIT_PURCHASE",
+   "amountIn": "0.217970159",
+   "assetIn": "SOL",
+   "amountOut": "",
+   "assetOut": "Token",
+   "eur": 26.07,
+   "usd": 29.24,
+   "result": null
+  },
+  {
+   "sig": "5eMtYkPW2kZUhp3mJrB3LxXCaN3PeaguUJ8QR6ujivahDWcCxSnrx8nBfZysw96nbKv9WPXt7fQxQnaj9oVwMSP9",
+   "time": 1793657610000,
+   "type": "EXTERNAL_DEPOSIT_PURCHASE",
+   "amountIn": "0.423440851",
+   "assetIn": "SOL",
+   "amountOut": "",
+   "assetOut": "Token",
+   "eur": 43.8,
+   "usd": 49.13,
+   "result": null
+  },
+  {
+   "sig": "4AcaTNWuVRmksiyE1bTnT8LLdXEGc4FDf5J72dHnvDK7WsJHSWURXguodBZar3qQqQyahX7wVK3S5RJ8Jk5jVfB",
+   "time": 1793658004000,
+   "type": "TOKEN_SWAP_BUY",
+   "amountIn": "13.612776",
+   "assetIn": "USDC",
+   "amountOut": "0.150502630",
+   "assetOut": "SOL",
+   "eur": 12.4,
+   "usd": null,
+   "result": null
+  },
+  {
+   "sig": "29KdwZ8VQwVN6cQhE2KmCZSuMmNdmuYcB8LspDkyBi8oxkJrVtCxehNhjZWKqbtqtniZoJZdWerKqZ1MGJ3t6B8P",
+   "time": 1793658038000,
+   "type": "TOKEN_SWAP_SELL",
+   "amountIn": "0.146460902",
+   "assetIn": "SOL",
+   "amountOut": "13.612776",
+   "assetOut": "USDC",
+   "eur": 12.07,
+   "usd": null,
+   "result": -0.33
+  },
+  {
+   "sig": "fqfLHxpMTD51ciG2DKQoQtfnDrsoBHyZSR55CGNHznk75JA9nP5YxE4gkZh7Prq73Yb6vd9q2qfs8s9qU9xmS7M",
+   "time": 1793659096000,
+   "type": "TOKEN_SWAP_BUY",
+   "amountIn": "17372.284485",
+   "assetIn": "Token",
+   "amountOut": "0.009883039",
+   "assetOut": "SOL",
+   "eur": 0.81,
+   "usd": null,
+   "result": null
+  },
+  {
+   "sig": "446HhgqcauoEebdGnMHB72f64PpNSPTS2oPLiyk31WJ2uxBrM3LQ5BT6eY8UUFqCSVKDtr7Jbf3tEr3Vct9dp5Rm",
+   "time": 1793659191000,
+   "type": "TOKEN_SWAP_SELL",
+   "amountIn": "0.005729421",
+   "assetIn": "SOL",
+   "amountOut": "17372.284485",
+   "assetOut": "Token",
+   "eur": 0.47,
+   "usd": null,
+   "result": -0.34
+  }
+ ],
+ "perf": {
+  "trades": 2,
+  "totalEur": -0.67,
+  "winRate": 0,
+  "avgSizeEur": 6.605,
+  "maxWin": -0.33,
+  "maxLoss": -0.34,
+  "depositsUsd": 78.37
+ },
+ "health": {
+  "overall": "ok",
+  "checked_at_utc": "2026-11-04T21:50:09+00:00",
+  "alertCount": 0,
+  "sources": [
+   {
+    "name": "helius_rpc",
+    "status": "ok",
+    "latency_ms": 136
+   },
+   {
+    "name": "solana_public_rpc",
+    "status": "ok",
+    "latency_ms": 1401
+   },
+   {
+    "name": "pumpfun_api",
+    "status": "ok",
+    "latency_ms": 45
+   },
+   {
+    "name": "pumpfun_web",
+    "status": "ok",
+    "latency_ms": 53
+   },
+   {
+    "name": "dexscreener",
+    "status": "ok",
+    "latency_ms": 86
+   },
+   {
+    "name": "x_com",
+    "status": "ok",
+    "latency_ms": 639
+   }
+  ]
+ },
+ "config": {
+  "buy_status": "PAPER ONLY until >=2026-11-05 20:30 MEZ and explicit user release",
+  "max_buy_sol": 0.5,
+  "max_open_positions": 10,
+  "risk_config_ref": {
+   "version": "2.3",
+   "verified": "MATCH"
+  }
+ },
+ "sync": {
+  "completeness": "unvollständig",
+  "open_issues": 84
+ },
+ "signals": [
+  {
+   "ts": "2026-11-04T22:47:00+01:00",
+   "symbol": "GTA",
+   "status": "BLOCK",
+   "reason_codes": [
+    "STATUS_NOT_PASS"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:47:00+01:00",
+   "symbol": "SI276",
+   "status": "BLOCK",
+   "reason_codes": [
+    "STATUS_NOT_PASS"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:47:00+01:00",
+   "symbol": "AMD",
+   "status": "BLOCK",
+   "reason_codes": [
+    "STATUS_NOT_PASS"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:47:00+01:00",
+   "symbol": "PREFIRE",
+   "status": "BLOCK",
+   "reason_codes": [
+    "DATA_MISSING"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:47:00+01:00",
+   "symbol": "MORTGAGE",
+   "status": "BLOCK",
+   "reason_codes": [
+    "DATA_MISSING"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:47:00+01:00",
+   "symbol": "Chiplon",
+   "status": "BLOCK",
+   "reason_codes": [
+    "DATA_MISSING"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:40:00+01:00",
+   "symbol": "GG",
+   "status": "BLOCK",
+   "reason_codes": [
+    "DATA_MISSING",
+    "STATUS_NOT_PASS"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:40:00+01:00",
+   "symbol": "GOAT",
+   "status": "BLOCK",
+   "reason_codes": [
+    "ROUTE_UNKNOWN"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:40:00+01:00",
+   "symbol": "Raul",
+   "status": "BLOCK",
+   "reason_codes": [
+    "LIQUIDITY_TOO_LOW"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:40:00+01:00",
+   "symbol": "NOWOKE",
+   "status": "BLOCK",
+   "reason_codes": [
+    "DATA_MISSING"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:20:00+01:00",
+   "symbol": "nuLL",
+   "status": "BLOCK",
+   "reason_codes": [
+    "DATA_MISSING"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:20:00+01:00",
+   "symbol": "tism",
+   "status": "BLOCK",
+   "reason_codes": [
+    "DATA_MISSING"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:20:00+01:00",
+   "symbol": "5STAR",
+   "status": "BLOCK",
+   "reason_codes": [
+    "DATA_MISSING"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:20:00+01:00",
+   "symbol": "george",
+   "status": "BLOCK",
+   "reason_codes": [
+    "DATA_MISSING"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:07:30+01:00",
+   "symbol": "SUPERBOWL",
+   "status": "BLOCK",
+   "reason_codes": [
+    "DATA_MISSING"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:07:30+01:00",
+   "symbol": "ANTI",
+   "status": "BLOCK",
+   "reason_codes": [
+    "ROUTE_UNKNOWN"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:07:30+01:00",
+   "symbol": "Aren",
+   "status": "BLOCK",
+   "reason_codes": [
+    "DATA_MISSING"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:07:30+01:00",
+   "symbol": "ZILLIONS",
+   "status": "BLOCK",
+   "reason_codes": [
+    "ROUTE_UNKNOWN"
+   ]
+  },
+  {
+   "ts": "2026-11-04T22:07:30+01:00",
+   "symbol": "GTA",
+   "status": "BLOCK",
+   "reason_codes": [
+    "STATUS_NOT_PASS"
+   ]
+  },
+  {
+   "ts": "2026-11-04T21:44:46+01:00",
+   "symbol": "NEMO",
+   "status": "BLOCK",
+   "reason_codes": [
+    "LIQUIDITY_TOO_LOW"
+   ]
+  },
+  {
+   "ts": "2026-11-04T21:44:46+01:00",
+   "symbol": "LiuSal",
+   "status": "BLOCK",
+   "reason_codes": [
+    "LIQUIDITY_TOO_LOW"
+   ]
+  },
+  {
+   "ts": "2026-11-04T21:44:46+01:00",
+   "symbol": "Aren",
+   "status": "BLOCK",
+   "reason_codes": [
+    "LIQUIDITY_TOO_LOW"
+   ]
+  },
+  {
+   "ts": "2026-11-04T21:44:46+01:00",
+   "symbol": "Aren",
+   "status": "BLOCK",
+   "reason_codes": [
+    "LIQUIDITY_TOO_LOW"
+   ]
+  },
+  {
+   "ts": "2026-11-04T21:44:46+01:00",
+   "symbol": "ABTC",
+   "status": "BLOCK",
+   "reason_codes": [
+    "LIQUIDITY_TOO_LOW"
+   ]
+  }
+ ],
+ "arbitration": [
+  {
+   "ts_berlin": "2026-11-04 22:15",
+   "token": "Aren",
+   "final_signal": "WARN (A3)",
+   "input_severity": "CRITICAL / HIGH"
+  },
+  {
+   "ts_berlin": "2026-11-04 19:08",
+   "token": "PEPE",
+   "final_signal": "leicht bullish (nicht gepostet)",
+   "input_severity": "HIGH"
+  }
+ ],
+ "executionsCount": 0
+}
