@@ -115,7 +115,7 @@ setInterval(hlChange,30000);
 
 /* ---------- Memecoins: DexScreener ---------- */
 function botMints(){const s=D.snap;if(!s)return[];const out=[];const add=m=>{if(m&&!m.startsWith('0x')&&!out.includes(m))out.push(m)};D.extra.forEach(add);
- s.positions.forEach(p=>add(p.mint));s.radar.forEach(r=>add(r.mint));s.flow.forEach(f=>add(f.mint));s.bots.forEach(b=>add(b.coin?.mint));s.coins.forEach(c=>add(c.mint));const v=s.v4;if(v){v.a1.list.slice(0,12).forEach(a=>add(a.mint));v.scouts.c3.scanNow.forEach(e=>add(e.mint));v.scouts.c1.slice(0,10).forEach(e=>add(e.mint))}return out.slice(0,90)}
+ s.radar.forEach(r=>add(r.mint));s.flow.forEach(f=>add(f.mint));s.bots.forEach(b=>add(b.coin?.mint));s.coins.forEach(c=>add(c.mint));const v=s.v4;if(v){v.a1.list.slice(0,12).forEach(a=>add(a.mint));v.scouts.c3.scanNow.forEach(e=>add(e.mint));v.scouts.c1.slice(0,10).forEach(e=>add(e.mint))}return out.slice(0,90)}
 let dexBusy=false;
 async function pollDex(now){
  if(dexBusy&&!now)return;if(!D.snap)return;dexBusy=true;
@@ -192,10 +192,11 @@ const KP=[];
 function renderKpis(){
  const s=D.snap,host=$('#kpis');
  if(!KP.length){const names=['Bots aktiv','Signale','Radar-Kandidaten','Offene Positionen','Paper-Equity (SOL)','Wallet-SOL live'];names.forEach((n,i)=>{const d=document.createElement('div');d.className='kpi';d.style.animationDelay=i*70+'ms';d.innerHTML=`<small>${n}</small><b class="mono">–</b><span></span>`;host.appendChild(d);KP.push({el:d,b:d.children[1],sub:d.children[2],v:null,from:0,to:null,dec:0,t0:0})});
-  host.children[0].dataset.tip='Bots mit Aktivität in den letzten 15 Minuten (live berechnet).';host.children[1].dataset.tip='Alle Analyse-Signale im Log, davon blockiert.';host.children[2].dataset.tip='Coins, die der Launch Sniffer im letzten Lauf nahe der Graduation (≥80 % Bonding Curve) gefunden hat.';host.children[3].dataset.tip='Offene Positionen laut Bot (Paper-Modus: simuliert).';host.children[4].dataset.tip='Simuliertes Paper-Konto des Bots – kein echtes Geld.';host.children[5].dataset.tip='SOL in Haupt- + Trading-Wallet, live über Solana-WebSocket.'}
+  host.children[0].dataset.tip='Bots mit Aktivität in den letzten 15 Minuten (live berechnet).';host.children[1].dataset.tip='Alle Analyse-Signale im Log, davon blockiert.';host.children[2].dataset.tip='Coins, die der Launch Sniffer im letzten Lauf nahe der Graduation (≥80 % Bonding Curve) gefunden hat.';host.children[3].dataset.tip='Nur mit geprüftem positionBook. Steuer-Lots und leere Dateien sind keine Null.';host.children[4].dataset.tip='Nur mit geprüftem Paper-Buch. Kein Steuer-Ledger.';host.children[5].dataset.tip='SOL in Haupt- + Trading-Wallet, live über Solana-WebSocket.'}
  const act=s.bots.filter(b=>botSt(b)[0]==='active').length;
  const w=s.wallets.map(x=>D.wal[x.address]?.sol);const wsum=w.some(v=>v!=null)?w.reduce((a,v)=>a+(v||0),0):null;
- const vals=[[act,0,`von ${s.bots.length} Bots`],[s.counts.signals,0,`geblockt ${s.counts.blocked} · MONITOR ${s.counts.monitor}`],[s.radar.length,0,`Sniffer: ${s.sniffer?.scanned??'–'} gescannt (≥${s.sniffer?.minProgress??'–'} %)`],[s.pf.openPositions,0,`Modus ${s.mode}`],[s.paper?.equitySol,3,s.paper?`${s.paper.closed} geschlossen · Netto ${nf(s.paper.netPnlSol,3)} SOL`:''],[wsum,4,wsum==null?'wird geladen …':s.wallets.map(x=>x.label.split('-')[0]+' '+nf(D.wal[x.address]?.sol,3)).join(' · ')]];
+ const books=tradeReport(s),openN=books.positions?books.positions.count:null,paperN=books.paper?books.paper.closed:null;
+ const vals=[[act,0,`von ${s.bots.length} Bots`],[s.counts.signals,0,`geblockt ${s.counts.blocked} · MONITOR ${s.counts.monitor}`],[s.radar.length,0,`Sniffer: ${s.sniffer?.scanned??'–'} gescannt (≥${s.sniffer?.minProgress??'–'} %)`],[openN,0,!books.positions?UNVERIFIED:openN==null?'Keine Daten':`Modus ${s.mode}`],[paperN,0,!books.paper?UNVERIFIED:paperN==null?'Keine Daten':`PAPER · beobachtet ${dtM(Date.parse(books.paper.observedAt))} Uhr`],[wsum,4,wsum==null?'wird geladen …':s.wallets.map(x=>x.label.split('-')[0]+' '+nf(D.wal[x.address]?.sol,3)).join(' · ')]];
  vals.forEach(([v,d,sub],i)=>{const k=KP[i];k.dec=d;setT(k.sub,sub);if(v==null){setT(k.b,'–');k.to=null;return}if(k.to!==v){k.from=k.v??0;k.to=v;k.t0=performance.now();k.done=false}});
 }
 function animKpis(now){for(const k of KP){if(k.to==null||k.done)continue;const p=Math.min(1,(now-k.t0)/700),e=1-Math.pow(1-p,3);const v=k.from+(k.to-k.from)*e;k.v=v;setT(k.b,nf(p<1?v:k.to,k.dec));if(p>=1)k.done=true}}
@@ -221,7 +222,7 @@ function updBot(el,b){
  const cf=r?.confidence;$('.conf',el).hidden=cf==null;$('.conf i',el).style.width=(cf==null?0:Math.max(0,Math.min(100,cf)))+'%';setT($('.cv',el),cf==null?'':'Conf '+cf);
  const rs=(r?.reasons?.length?r.reasons.map(reasonDe):r?.risks?.length?[r.risks[0]]:[]).slice(0,2);
  const rh=rs.map(x=>`<li title="${esc(x)}">${esc(x)}</li>`).join('')||`<li style="border-style:dashed;color:#777">${r?'keine Gründe im Log':'keine Begründung vorhanden'}</li>`;if(el._rh!==rh){$('.rs',el).innerHTML=rh;el._rh=rh}
- const mh=(b.metrics||[]).slice(0,3).map(([l,x])=>`<div><small>${esc(l)}</small><b>${esc(x)}</b></div>`).join('');if(el._mh!==mh){$('.mt',el).innerHTML=mh;el._mh=mh}$('.mt',el).hidden=!mh;
+ const mh=(b.metrics||[]).slice(0,3).map(([l,x])=>`<div><small>${esc(l)}</small><b>${esc(publicMetric(l,x))}</b></div>`).join('');if(el._mh!==mh){$('.mt',el).innerHTML=mh;el._mh=mh}$('.mt',el).hidden=!mh;
  setT($('.ago',el),b.lastT?'zuletzt '+ago(b.lastT):'keine Zeitangabe');
  updBotLive(el,b);
 }
@@ -378,8 +379,8 @@ function renderRail(){
  const act=s.bots.filter(b=>botSt(b)[0]==='active').length;setT($('#pulsSub'),`${act}/${s.bots.length} aktiv`);
 }
 function renderRisk(){
- const s=D.snap;if(!s)return;const c=s.config||{},open=s.pf?.openPositions??0,max=c.maxOpenPositions||0;const f=max?Math.min(1,open/max):0,C=2*Math.PI*36;
- const R=`<div class="gauge"><svg viewBox="0 0 92 92"><circle cx="46" cy="46" r="36" fill="none" stroke="#222" stroke-width="7"/><circle cx="46" cy="46" r="36" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(f*C).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 46 46)" style="transition:stroke-dasharray 1s"/><text x="46" y="50" text-anchor="middle" fill="#fff" font-family="ui-monospace,monospace" font-size="17">${open}/${max||'–'}</text></svg><div style="flex:1"><div class="sec" style="font-size:10.5px;margin-bottom:4px">Offene Positionen / Maximum</div><div class="kv"><span>Max. SOL pro Kauf</span><b class="mono">${c.maxBuySol??'–'}</b></div><div class="kv"><span>Tagesstopp</span><b class="mono">${c.dailyStopPct??'–'} %</b></div><div class="kv"><span>Wochenpause</span><b class="mono">${c.weeklyPausePct??'–'} %</b></div></div></div><div class="kv"><span>ATH-Stopp</span><b class="mono">${c.athStopPct??'–'} %</b></div><div class="kv"><span>Max. Signalalter</span><b class="mono">${c.maxSignalAgeMin??'–'} Min</b></div><div class="kv"><span>Modus</span><b class="mono">${esc(s.mode)}</b></div><div class="kv"><span>Paper-Equity</span><b class="mono">${s.paper?nf(s.paper.equitySol,3)+' SOL':'keine Daten'}</b></div><div class="kv"><span>Paper: geschlossen / übersprungen</span><b class="mono">${s.paper?s.paper.closed+' / '+s.paper.skips:'–'}</b></div><div style="padding-top:8px"><div class="sec" style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:3px">Pflicht-Gates vor jedem Kauf</div>${(c.requiredGates||[]).map(g=>`<span class="tag">${esc(g)}</span>`).join('')}</div>${s.buyStatus?`<div class="sec" style="font-size:11px;padding-top:8px">${esc(s.buyStatus)}</div>`:''}<div class="sec" style="font-size:10.5px;padding-top:6px">Tages-/Wochen-Verlust wird vom Bot nicht exportiert – daher keine Auslastungsanzeige dafür.</div>`;
+ const s=D.snap;if(!s)return;const c=s.config||{},books=tradeReport(s),open=books.positions?books.positions.count:null,max=c.maxOpenPositions||0;const f=open==null||!max?0:Math.min(1,open/max),C=2*Math.PI*36;const openTxt=open==null?'–':String(open);
+ const R=`<div class="gauge"><svg viewBox="0 0 92 92"><circle cx="46" cy="46" r="36" fill="none" stroke="#222" stroke-width="7"/><circle cx="46" cy="46" r="36" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(f*C).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 46 46)" style="transition:stroke-dasharray 1s"/><text x="46" y="50" text-anchor="middle" fill="#fff" font-family="ui-monospace,monospace" font-size="17">${openTxt}/${max||'–'}</text></svg><div style="flex:1"><div class="sec" style="font-size:10.5px;margin-bottom:4px">Offene Positionen / Maximum</div><div class="kv"><span>Max. SOL pro Kauf</span><b class="mono">${c.maxBuySol??'–'}</b></div><div class="kv"><span>Tagesstopp</span><b class="mono">${c.dailyStopPct??'–'} %</b></div><div class="kv"><span>Wochenpause</span><b class="mono">${c.weeklyPausePct??'–'} %</b></div></div></div><div class="kv"><span>ATH-Stopp</span><b class="mono">${c.athStopPct??'–'} %</b></div><div class="kv"><span>Max. Signalalter</span><b class="mono">${c.maxSignalAgeMin??'–'} Min</b></div><div class="kv"><span>Modus</span><b class="mono">${esc(s.mode)}</b></div><div class="kv"><span>Paper-Ausführungen</span><b class="mono">${!books.paper?UNVERIFIED:books.paper.closed==null?'Keine Daten':countTxt(books.paper.closed)}</b></div><div class="kv"><span>Übersprungene Signale</span><b class="mono">${num(s.paper?.skips)==null?'–':countTxt(s.paper.skips)}</b></div><div style="padding-top:8px"><div class="sec" style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:3px">Pflicht-Gates vor jedem Kauf</div>${(c.requiredGates||[]).map(g=>`<span class="tag">${esc(g)}</span>`).join('')}</div>${s.buyStatus?`<div class="sec" style="font-size:11px;padding-top:8px">${esc(s.buyStatus)}</div>`:''}<div class="sec" style="font-size:10.5px;padding-top:6px">Tages-/Wochen-Verlust wird vom Bot nicht exportiert – daher keine Auslastungsanzeige dafür.</div>`;
  const rk=$('#risk');if(rk._h!==R){rk.innerHTML=R;rk._h=R}
 }
 function renderHealth(){
@@ -423,11 +424,11 @@ function botDrawer(b){
  <div class="sec2"><h4>Aktuelle Aufgabe</h4><div class="card">${esc(b.task||'Noch keine Aktivität im Log')}</div></div>
  ${b.coin&&b.coin.mint?`<div class="sec2"><h4>Beobachteter Coin</h4><div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn" data-act="coin" data-mint="${b.coin.mint}">${esc(b.coin.sym||short(b.coin.mint))} ›</button><span class="mono">${d&&!d.none?px(d.price):'–'}</span><span class="mono ${d&&!d.none?cls(d.c5):''}">${d&&!d.none&&d.c5!=null?pct(d.c5)+' (5 Min)':''}</span></div></div>`:''}
  <div class="sec2"><h4>Überlegung</h4><div class="card">${r?`<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px"><span class="badge ${vcls(r.verdict)}">${esc(r.verdict||'–')}</span>${r.badge?`<span class="badge">${esc(r.badge)}</span>`:''}${r.confidence!=null?`<span class="mono sec">Confidence ${r.confidence}/100</span>`:''}</div>${r.text?`<p style="margin-bottom:8px">${esc(r.text)}</p>`:''}${r.reasons?.length?`<div class="sec small" style="margin-bottom:4px">Gründe</div>${ulist(r.reasons.map(reasonDe))}`:''}${r.risks?.length?`<div class="sec small" style="margin:10px 0 4px">Risiken laut Analyse</div>${ulist(r.risks)}`:''}${!r.text&&!r.reasons?.length&&!r.risks?.length?'<span class="sec">Keine Begründung im Log.</span>':''}`:'<span class="sec">Dieser Bot hat noch keine Entscheidung geloggt – er wartet auf Signale.</span>'}</div></div>
- <div class="sec2"><h4>Kennzahlen</h4><div class="kvs">${(b.metrics||[]).map(([l,v])=>kv(l,esc(v))).join('')||'<span class="sec">–</span>'}</div></div>
+ <div class="sec2"><h4>Kennzahlen</h4><div class="kvs">${(b.metrics||[]).map(([l,v])=>kv(l,esc(publicMetric(l,v)))).join('')||'<span class="sec">–</span>'}</div></div>
  <div class="sec2"><h4>Letzte Aktionen</h4>${(b.recent||[]).length?b.recent.slice(0,10).map(e=>`<div class="dfe" ${e.mint?`data-act="coin" data-mint="${e.mint}"`:''}><span class="tm">${dtM(e.t)}</span><span><b>${esc(e.sym||e.kind)}</b> ${esc(e.text)}</span></div>`).join(''):'<span class="sec">keine</span>'}</div>
  ${botExtra(b)}<div class="sec2"><h4>Datenquellen (Dateien)</h4>${files||'<span class="sec">–</span>'}</div>`]}
 function coinDrawer(m){
- const s=D.snap,d=D.dex[m],v=s.verdicts?.[m],rd=s.radar.find(r=>r.mint===m),pos=s.positions.find(p=>p.mint===m);const sym=symOf(m);
+ const s=D.snap,d=D.dex[m],v=s.verdicts?.[m],rd=s.radar.find(r=>r.mint===m);const sym=symOf(m);
  const vv=v?[v.signal&&`<div class="dfe" style="cursor:default"><span class="tm">Analyst</span><span><b>${esc(v.signal.verdict)}</b> · Conf ${v.signal.confidence??'–'} · ${(v.signal.reasons||[]).map(reasonDe).join(', ')||'–'} <span class="sec">(${ago(v.signal.t)})</span></span></div>`,v.sentiment&&`<div class="dfe" style="cursor:default"><span class="tm">Sentiment</span><span>${esc(JSON.stringify(v.sentiment).slice(0,160))}</span></div>`,v.whale&&`<div class="dfe" style="cursor:default"><span class="tm">Whale</span><span>${v.whale.n}× · zuletzt ${esc(v.whale.lastAction||'–')} $${cmp(v.whale.lastUsd)} <span class="sec">(${ago(v.whale.lastT)})</span></span></div>`,v.exec&&`<div class="dfe" style="cursor:default"><span class="tm">Sniper</span><span><b>${esc(v.exec.status)}</b> – ${esc(reasonDe(v.exec.reason||''))}</span></div>`].filter(Boolean).join(''):'';
  return [sym,`
  <div class="sec2"><div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span class="big" data-lv="p">–</span><span class="mono" data-lv="c1"></span></div><div style="margin-top:8px">${mintBlock(m)}</div></div>
@@ -435,7 +436,7 @@ function coinDrawer(m){
  <div class="sec2"><h4>Markt (DexScreener, alle 5 s)</h4><div class="kvs" id="coinkv"></div></div>
  ${rd?`<div class="sec2"><h4>Im Signal-Radar</h4><div class="kvs">${kv('Bonding Curve',nf(rd.prog,1)+' %')}${kv('Market Cap','$'+cmp(rd.mc))}${kv('Volumen 5 Min','$'+cmp(rd.v5))}${kv('Käufe/Verkäufe',rd.buys+' / '+rd.sells)}${kv('Holder',rd.holders??'–')}${kv('Top-10',rd.top10!=null?nf(rd.top10,1)+' %':'–')}</div></div>`:''}
  <div class="sec2"><h4>Weg durch die Pipeline</h4>${journeyHTML(V4()?.journeys?.find(j=>j.mint===m))}${a1ForCoin(m)}</div>
- <div class="sec2"><h4>Was die Bots zu diesem Coin sagen</h4>${vv||'<span class="sec">Keine Bot-Einträge zu diesem Coin.</span>'}${pos?`<div class="dfe" style="cursor:default"><span class="tm">Position</span><span>${esc(JSON.stringify(pos).slice(0,200))}</span></div>`:''}</div>
+ <div class="sec2"><h4>Was die Bots zu diesem Coin sagen</h4>${vv||'<span class="sec">Keine Bot-Einträge zu diesem Coin.</span>'}</div>
  <div class="sec2" style="display:flex;gap:8px;flex-wrap:wrap">${d&&d.url?`<a class="btn" href="${esc(d.url)}" target="_blank" rel="noopener">DexScreener ↗</a>`:''}<a class="btn" href="https://solscan.io/token/${esc(m)}" target="_blank" rel="noopener">Solscan ↗</a></div>`]}
 function cexDrawer(k){
  const n=CEX.find(c=>c[0]===k)?.[1]||k;
@@ -768,31 +769,59 @@ function bzCell(k,label,value,sub,tip,state){
  return `<article class="bzcell${empty?' is-empty':''}" data-k="${k}" data-state="${state}" data-tip="${esc(tip)}"><small>${label}</small><b class="${empty?'':'mono'} ${state==='pos'?'up':state==='neg'?'down':''}">${empty?'Keine Daten':esc(value)}</b><span>${esc(sub)}</span></article>`;
 }
 function signState(v){return v>0?'pos':v<0?'neg':'zero'}
+const UNVERIFIED='Keine verifizierten Trade-Daten';
+function publicMetric(label,value){return /realis|echte trades|pnl|gewinn|verlust|equity|gesamtwert|wallet\s*sol|offene position|ledger|fifo|\bnetto\b/i.test(String(label))?'nicht verifiziert':value}
+function isoStamp(v){if(typeof v!=='string'||!v)return null;const t=Date.parse(v);return Number.isFinite(t)?v:null}
+function pathOk(src,prefix){if(typeof src!=='string'||src.length<12||src.length>160)return false;if(src.startsWith('/')||src.includes('..')||src.includes('\\')||/home|tax|fifo|ledger|pnl|perf/i.test(src))return false;return src.startsWith(prefix)}
+function countField(v){if(v==null)return {ok:true,v:null};const n=num(v);return n!=null&&n>=0&&n===Math.floor(n)?{ok:true,v:n}:{ok:false}}
+function moneyField(v){if(v==null)return {ok:true,v:null};const n=num(v);return n==null?{ok:false}:{ok:true,v:n}}
+function readBook(book,venue,prefix){
+ if(!book||book.verified!==true||book.coverage!=='complete'||book.venue!==venue)return null;
+ if(!pathOk(book.source,prefix))return null;
+ const observedAt=isoStamp(book.observedAt);if(!observedAt)return null;
+ if(!Object.prototype.hasOwnProperty.call(book,'lastActionAt'))return null;
+ const lastActionAt=book.lastActionAt==null?null:isoStamp(book.lastActionAt);
+ if(book.lastActionAt!=null&&!lastActionAt)return null;
+ const closed=countField(book.closed),wins=countField(book.wins),hold=book.avgHoldMs==null?{ok:true,v:null}:num(book.avgHoldMs)!=null&&book.avgHoldMs>=0?{ok:true,v:book.avgHoldMs}:{ok:false};
+ const gp=moneyField(book.grossProfitEur),gl=moneyField(book.grossLossEur),ne=moneyField(book.netEur),ns=moneyField(book.netSol);
+ if(!closed.ok||!wins.ok||!hold.ok||!gp.ok||!gl.ok||!ne.ok||!ns.ok)return null;
+ if(wins.v!=null&&closed.v!=null&&wins.v>closed.v)return null;
+ return {venue,source:book.source,observedAt,lastActionAt,closed:closed.v,wins:wins.v,avgHoldMs:hold.v,grossProfitEur:gp.v,grossLossEur:gl.v,netEur:ne.v,netSol:ns.v};
+}
+function tradeReport(s){
+ const ex=s&&s.schemaVersion===1?s.execution:null;
+ const real=ex?readBook(ex.real,'REAL','trading/real/'):null;
+ const paper=ex?readBook(ex.paper,'PAPER','trading/paper/'):null;
+ let positions=null;const pb=s&&s.schemaVersion===1?s.positionBook:null;
+ if(pb&&pb.verified===true&&pb.coverage==='complete'&&pathOk(pb.source,'trading/positions/')&&isoStamp(pb.observedAt)){
+  const count=countField(pb.count);
+  if(count.ok)positions={count:count.v,observedAt:pb.observedAt,source:pb.source};
+ }
+ return {real,paper,positions};
+}
+function bookCard(book,venue){
+ if(!book)return bzCell(venue,venue+' · ausgeführt',null,UNVERIFIED,UNVERIFIED,'empty');
+ const title=book.venue==='REAL'?'REAL · ausgeführt':'PAPER · ausgeführt';
+ const closed=book.closed==null?null:countTxt(book.closed);
+ const net=book.venue==='REAL'?(book.netEur==null?null:money(book.netEur)):(book.netSol==null?null:nf(book.netSol,3)+' SOL');
+ const hold=book.avgHoldMs==null?null:holdTxt(book.avgHoldMs);
+ const win=book.closed>0&&book.wins!=null?rateTxt(book.wins/book.closed):null;
+ const last=book.lastActionAt?`Letzte Ausführung ${dtM(Date.parse(book.lastActionAt))} Uhr`:book.closed===0?'Letzte Ausführung: keine':'Letzte Ausführung: Keine Daten';
+ const gross=book.venue==='REAL'?[book.grossProfitEur==null?null:'Brutto-Gewinn '+money(book.grossProfitEur),book.grossLossEur==null?null:'Brutto-Verlust '+money(book.grossLossEur)].filter(Boolean).join(' · '):'';
+ const extra=[net==null?'Netto: Keine Daten':'Netto '+net,hold==null?'Haltedauer: Keine Daten':'Haltedauer '+hold,win,gross].filter(Boolean).join(' · ');
+ return bzCell(book.venue,title,closed,`Beobachtet ${dtM(Date.parse(book.observedAt))} Uhr · ${last} · ${extra}`,book.source,book.closed==null?'empty':'num');
+}
 function renderBilanz(){
  const host=$('#bilanz'),sub=$('#bilSub');if(!host)return;const s=D.snap;if(!s)return;
- const m=bilanzMetrics(s);
- const mode=m.mode==='PAPER'?'PAPER · simuliert':m.mode?m.mode+' · Bot-Modus':'Modus: Keine Daten';
- if(sub)setT(sub,mode+' · Beträge realisiert, nicht aus Wallet-Salden');
- const profit=m.grossProfit==null?null:money(m.grossProfit);
- const loss=m.grossLoss==null?null:money(m.grossLoss);
- const net=m.net==null?null:money(m.net);
- const trades=m.trades==null?null:countTxt(m.trades);
- const rate=m.winRate==null?null:rateTxt(m.winRate);
- const hold=m.hold?holdTxt(m.hold.ms):null;
- const grossWhy=m.reasons.gross||'Summe aus pnlByToken.eur';
- const cells=bzCell('grossProfit','Brutto-Gewinn',profit,m.grossProfit==null?grossWhy:(m.grossProfit===0?'Keine positiven Beträge · realisiert':'Summe positiver Beträge · realisiert'),'Brutto realisierter Gewinn in EUR. Quelle: positive pnlByToken.eur. Nicht aus Wallet-Salden.',m.grossProfit==null?'empty':signState(m.grossProfit))
-  +bzCell('grossLoss','Brutto-Verlust',loss,m.grossLoss==null?grossWhy:(m.grossLoss===0?'Keine negativen Beträge · realisiert':'Summe negativer Beträge · realisiert'),'Brutto realisierter Verlust in EUR. Quelle: negative pnlByToken.eur.',m.grossLoss==null?'empty':signState(m.grossLoss))
-  +bzCell('net','Netto-PnL',net,m.net==null?m.reasons.net:'realisiert · perf.totalEur','Netto realisiertes PnL in EUR. Quelle: perf.totalEur. Paper-Equity und Wallet-Salden zählen nicht.',m.net==null?'empty':signState(m.net))
-  +bzCell('trades','Ausgeführte Trades',trades,m.trades==null?m.reasons.trades:'realisiert · perf.trades · ohne Skips','Anzahl realisierter Trades. Quelle: perf.trades. Blockierte Signale und paper.skips zählen nicht.',m.trades==null?'empty':'num');
- const subc=bzCell('winRate','Trefferquote',rate,m.winRate==null?m.reasons.winRate:`${countTxt(m.wins)} von ${countTxt(m.trades)} · perf.wins`,'Trefferquote aus perf.wins / perf.trades. Bei null Trades nicht definiert.',m.winRate==null?'empty':'num')
-  +bzCell('hold','Ø Haltedauer',hold,m.hold?('Quelle '+m.hold.src):m.reasons.hold,'Mittlere Haltedauer nur aus expliziten Zeiten. Sonst Keine Daten, nicht 0.',m.hold?'num':'empty');
- let note='Quelle: perf.totalEur, pnlByToken[].eur, perf.trades, perf.wins. Realisiertes Ledger in EUR — nicht Paper-Equity, nicht Wallet-Salden, nicht counts.blocked.';
- const skips=num(s.paper?.skips);if(skips!=null)note+=` paper.skips = ${countTxt(skips)} zählt nicht als Trade.`;
- const a5=botMetric('A5','Echte Trades');if(typeof a5==='number')note+=` A5 echte Ausführungen: ${countTxt(a5)}.`;
- const b3=botMetric('B3','Realisierte Trades');if(typeof b3==='number'&&m.trades!=null&&b3!==m.trades)note+=` B3 Realisierte Trades (${countTxt(b3)}) weicht von perf.trades ab.`;
- if(Array.isArray(s.pnlByToken)&&m.trades!=null){const ts=s.pnlByToken.reduce((a,r)=>a+(num(r?.trades)||0),0);if(s.pnlByToken.some(r=>num(r?.trades)==null)||ts!==m.trades)note+=' Summe pnlByToken.trades ist nicht die Trade-Anzahl.'}
- note+=' Unrealisiertes PnL ist nicht ausgewiesen.';
- const html=`<div class="bzgrid">${cells}</div><div class="bzgrid bzsub">${subc}</div><p class="bznote">${esc(note)}</p>`;
+ const r=tradeReport(s);
+ if(!r.real&&!r.paper){
+  if(sub)setT(sub,'Keine verifizierten Trade-Daten');
+  const html=`<div class="bzunverified" data-k="unverified"><b>Keine verifizierten Trade-Daten</b><p>Reale und Paper-Ausführungen sind nicht als vollständig geprüft markiert. Historische Steuerzahlen werden nicht als Bot-Ergebnis gezeigt. Eine leere Datei ist keine Null.</p></div>`;
+  if(host._h!==html){host.innerHTML=html;host._h=html}
+  return;
+ }
+ if(sub)setT(sub,'Getrennte Bücher · Beobachtet ist nicht die letzte Ausführung');
+ const html=`<div class="bzgrid bzsub">${bookCard(r.real,'REAL')}${bookCard(r.paper,'PAPER')}</div><p class="bznote">Nur Bücher mit schemaVersion 1, verified, coverage complete und Quelle unter trading/real bzw. trading/paper. perf und pnlByToken werden nicht angezeigt.</p>`;
  if(host._h!==html){host.innerHTML=html;host._h=html}
 }
 
@@ -916,6 +945,6 @@ bgInit();ecgSize();buildMini();requestAnimationFrame(loop);
 binConnect();hlConnect();hlChange();
 if(innerWidth<1180)$('#pPrices').classList.add('min');
 initPage();initBotData();
-window.__bilanz=bilanzMetrics;
+window.__bilanz=tradeReport;
 window.__applyState=applyState;
 window.__snap=()=>D.snap;
