@@ -64,7 +64,7 @@ function rememberPause(until){apiPauseUntil=Math.max(apiPauseUntil,until||0);try
 function apiPaused(){try{const u=+localStorage.getItem('grok.apiPauseUntil')||0;if(u>apiPauseUntil)apiPauseUntil=u}catch{}return Date.now()<apiPauseUntil}
 function claimApiSlot(){const now=Date.now();try{const last=+localStorage.getItem('grok.apiFetchAt')||0;if(now-last<65000)return false;localStorage.setItem('grok.apiFetchAt',String(now))}catch{return true}return true}
 function noteLimit(r){const rem=r.headers.get('x-ratelimit-remaining');const reset=+r.headers.get('x-ratelimit-reset')||0;const until=reset?reset*1000:Date.now()+15*60*1000;if(r.status===403||r.status===429||(rem!=null&&rem!==''&&+rem<=1))rememberPause(until)}
-async function fetchStateUrl(url,headers){const c=new AbortController(),t=setTimeout(()=>c.abort(),STATE_TIMEOUT);try{return await fetch(url,{cache:'default',headers:headers||{},signal:c.signal})}finally{clearTimeout(t)}}
+async function fetchStateUrl(url,headers){const c=new AbortController(),t=setTimeout(()=>c.abort(),STATE_TIMEOUT);const fresh=url.includes('raw.githubusercontent.com')?url+(url.includes('?')?'&':'?')+'t='+Date.now():url;try{return await fetch(fresh,{cache:'no-store',headers:headers||{},signal:c.signal})}finally{clearTimeout(t)}}
 async function pullRemote(){
  const api=(CFG.live&&/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/contents\//.test(CFG.live))?CFG.live:PUBLIC_API;
  const raw=(CFG.raw&&/^https:\/\/raw\.githubusercontent\.com\//.test(CFG.raw))?CFG.raw:(rawFromApi(api)||PUBLIC_RAW);
@@ -168,7 +168,7 @@ let sws=null,solSubbed='',solMsg=0;
 const RPC='https://solana-rpc.publicnode.com';
 async function solPoll(){
  if(!D.snap)return;const a=D.snap.wallets.map(w=>w.address);
- try{const r=await jpost(RPC,{jsonrpc:'2.0',id:1,method:'getMultipleAccounts',params:[a,{encoding:'base64',dataSlice:{offset:0,length:0}}]});if(r.error)throw new Error(r.error.message);r.result.value.forEach((v,i)=>{D.wal[a[i]]={sol:(v?v.lamports:0)/1e9,t:Date.now(),via:'RPC'}});D.src.sol.rpc=true;D.src.sol.err=null}catch(e){D.src.sol.err=String(e.message||e)}
+ try{const r=await jpost(RPC,{jsonrpc:'2.0',id:1,method:'getMultipleAccounts',params:[a,{encoding:'base64',dataSlice:{offset:0,length:0}}]});if(r.error)throw new Error(r.error.message);r.result.value.forEach((v,i)=>{D.wal[a[i]]=v&&Number.isFinite(v.lamports)?{sol:v.lamports/1e9,t:Date.now(),via:'RPC'}:{sol:null,t:Date.now(),via:'RPC'}});D.src.sol.rpc=true;D.src.sol.err=null}catch(e){D.src.sol.err=String(e.message||e)}
 }
 setInterval(solPoll,20000);
 function subSol(){
@@ -450,7 +450,7 @@ function renderWallets(){
  const s=D.snap;if(!s)return;const el=$('#wallets');
  const H=s.wallets.map(w=>`<div class="wal"><div class="wl"><b>${esc(w.label)}</b><span class="mono" data-w="${w.address}">–</span></div>${addrBlock(w.address)}</div>`).join('')+(s.evm?`<div class="wal"><div class="wl"><b>EVM-Adresse</b><span class="sec">ohne Live-Stand</span></div>${addrBlock(s.evm,{sol:false})}</div>`:'')+`<div class="sec" style="font-size:10.5px;padding-top:4px">Token-Bestände sind über öffentliche RPCs nicht abrufbar und werden nicht angezeigt.</div>`;
  if(el._h!==H){el.innerHTML=H;el._h=H}
- let tot=0,any=false;s.wallets.forEach(w=>{const d=D.wal[w.address];const e=$(`[data-w="${w.address}"]`,el);if(e)setT(e,d?nf(d.sol,4)+' SOL'+(d.via==='WSS'?' · live':''):'lädt …');if(d){tot+=d.sol;any=true}});
+ let tot=0,any=false;s.wallets.forEach(w=>{const d=D.wal[w.address];const e=$(`[data-w="${w.address}"]`,el);const known=d&&d.sol!=null;if(e)setT(e,known?nf(d.sol,4)+' SOL'+(d.via==='WSS'?' · live':''):'nicht verfügbar');if(known){tot+=d.sol;any=true}});
  setT($('#walSub'),any?nf(tot,4)+' SOL gesamt':'');
 }
 function renderSrcs(){
