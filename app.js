@@ -56,10 +56,14 @@ async function pollSnapshot(){
  if(!ok){try{const s=await jget((CFG.state||'state.json')+'?t='+Date.now(),{cache:'no-store'});applyState(s,'snapshot');ecgKick(.8)}catch(e){D.src.snapErr=String(e.message||e)}}}
  setTimeout(pollSnapshot,CFG.live?15000:30000);
 }
+function bilanzSig(s){
+ const pick=id=>{const b=(s.bots||[]).find(x=>x&&x.id===id);return b?b.metrics:null};
+ try{return JSON.stringify([s.mode,s.perf??null,s.pnlByToken??null,s.positions??null,s.paper??null,pick('A5'),pick('B3')])}catch{return ''}
+}
 function applyState(s,from){
  if(!s||!s.bots)return;
  if(D.snap&&from==='snapshot'&&D.stream.lastState&&s.generatedAt<=D.snap.generatedAt)return;
- if(D.snap&&s.generatedAt===D.snap.generatedAt&&from==='snapshot'){D.stateAt=Date.now();D.ghLive=Date.parse(s.generatedAt)||D.ghLive;renderChips();return}
+ if(D.snap&&s.generatedAt===D.snap.generatedAt&&from==='snapshot'&&bilanzSig(s)===bilanzSig(D.snap)){D.stateAt=Date.now();D.ghLive=Date.parse(s.generatedAt)||D.ghLive;renderChips();return}
  const first=!D.snap;D.snap=s;D.stateAt=Date.now();D.stateFrom=from;
  s.coins.forEach(c=>c.mint&&!c.mint.startsWith('0x'));
  let fresh=0;const keys=new Set();
@@ -673,8 +677,127 @@ function doSearch(){
  box.innerHTML=out.length?out.slice(0,14).join(''):'<div class="empty">Nichts gefunden – keine Daten zu „'+esc(q)+'“.</div>';box.hidden=false;
 }
 
+/* ================= Seite 5 · Bilanz ================= */
+const num=v=>typeof v==='number'&&Number.isFinite(v)?v:null;
+function money(v){if(!(v<0)&&!(v>0))return '0,00 EUR';return (v>0?'+':'')+nf(v,2)+' EUR'}
+function countTxt(v){return Number.isInteger(v)?nf(v,0):nf(v,2)}
+function rateTxt(x){const p=x*100;const d=Math.abs(p-Math.round(p))<0.05?0:1;return nf(p,d)+' %'}
+function holdTxt(ms){
+ if(ms<1000)return Math.round(ms)+' ms';
+ const s=ms/1000;if(s<90)return nf(s,s<10?1:0)+' s';
+ const m=s/60;if(m<90)return nf(m,1)+' Min';
+ const h=m/60;if(h<48)return nf(h,1)+' Std';
+ return nf(h/24,1)+' Tage';
+}
+function grossFrom(rows,net,trades){
+ if(!Array.isArray(rows))return {ok:false,why:'Feld pnlByToken fehlt.'};
+ if(rows.some(r=>!r||typeof r!=='object'||num(r.eur)==null))return {ok:false,why:'pnlByToken enthält Einträge ohne EUR-Betrag.'};
+ const sum=rows.reduce((a,r)=>a+r.eur,0);
+ if(net!=null&&Math.abs(sum-net)>0.02)return {ok:false,why:'Summe pnlByToken.eur passt nicht zu perf.totalEur.'};
+ if(!rows.length){
+  if(trades>0)return {ok:false,why:'pnlByToken ist leer, obwohl Trades gezählt sind.'};
+  if(net!=null&&Math.abs(net)>0.02)return {ok:false,why:'pnlByToken ist leer und widerspricht dem Netto.'};
+  if(trades===0||net===0)return {ok:true,profit:0,loss:0};
+  return {ok:false,why:'pnlByToken ist leer — Brutto ist nicht belegt.'};
+ }
+ return {ok:true,profit:rows.reduce((a,r)=>a+(r.eur>0?r.eur:0),0),loss:rows.reduce((a,r)=>a+(r.eur<0?r.eur:0),0)};
+}
+function holdInfo(s){
+ const perf=s&&s.perf&&typeof s.perf==='object'?s.perf:{};
+ const direct=[['avgHoldMs',1],['avgHoldingMs',1],['meanHoldMs',1],['avgHoldSec',1000],['avgHoldingSec',1000],['holdSec',1000],['avgHoldMin',60000]];
+ for(const [k,mul] of direct){const v=num(perf[k]);if(v!=null&&v>=0)return {ms:v*mul,src:'perf.'+k}}
+ const lists=[['closedTrades','closedTrades'],['realizedTrades','realizedTrades'],['trades','trades']];
+ for(const [key,src] of lists){
+  const arr=s[key];if(!Array.isArray(arr)||!arr.length)continue;
+  const durs=[];let bad=false;
+  for(const r of arr){
+   if(!r||typeof r!=='object'){bad=true;break}
+   const st=String(r.status||r.kind||r.action||'').toUpperCase();
+   if(/SKIP|BLOCK|CANCEL|REJECT/.test(st))continue;
+   let ms=num(r.holdMs);if(ms==null&&num(r.holdSec)!=null)ms=r.holdSec*1000;
+   if(ms==null){
+    const a=num(r.openedAt)??num(r.entryT)??num(r.openT);
+    const b=num(r.closedAt)??num(r.exitT)??num(r.closeT);
+    if(a==null||b==null||b<a){bad=true;break}
+    ms=b-a;
+   }
+   if(ms<0){bad=true;break}
+   durs.push(ms);
+  }
+  if(!bad&&durs.length)return {ms:durs.reduce((a,b)=>a+b,0)/durs.length,src};
+ }
+ if(Array.isArray(s.pnlByToken)&&s.pnlByToken.length){
+  const durs=[];let saw=false,bad=false;
+  for(const r of s.pnlByToken){
+   let ms=num(r&&r.holdMs);if(r&&ms==null&&num(r.holdSec)!=null)ms=r.holdSec*1000;
+   if(ms==null){
+    const a=num(r&&(r.openedAt??r.entryT));const b=num(r&&(r.closedAt??r.exitT));
+    if(a!=null||b!=null){saw=true;if(a==null||b==null||b<a)bad=true;else durs.push(b-a)}
+   }else{saw=true;if(ms<0)bad=true;else durs.push(ms)}
+  }
+  if(saw&&!bad&&durs.length===s.pnlByToken.length)return {ms:durs.reduce((a,b)=>a+b,0)/durs.length,src:'pnlByToken'};
+ }
+ return null;
+}
+function bilanzMetrics(s){
+ const out={mode:typeof s?.mode==='string'&&s.mode?s.mode:null,net:null,trades:null,wins:null,winRate:null,grossProfit:null,grossLoss:null,hold:null,reasons:{}};
+ if(!s||typeof s!=='object'){out.reasons.net=out.reasons.trades=out.reasons.gross=out.reasons.winRate=out.reasons.hold='Kein Snapshot.';return out}
+ const perf=s.perf&&typeof s.perf==='object'?s.perf:null;
+ if(!perf){out.reasons.net='Feld perf.totalEur fehlt.';out.reasons.trades='Feld perf.trades fehlt.';out.reasons.wins='Feld perf.wins fehlt.'}
+ else{
+  out.net=num(perf.totalEur);out.trades=num(perf.trades);out.wins=num(perf.wins);
+  if(out.net==null)out.reasons.net='Feld perf.totalEur fehlt oder ist keine Zahl.';
+  if(out.trades==null||out.trades<0){if(out.trades<0)out.reasons.trades='perf.trades ist negativ.';else out.reasons.trades='Feld perf.trades fehlt oder ist keine Zahl.';out.trades=out.trades<0?null:out.trades}
+  if(out.wins!=null&&out.wins<0){out.wins=null;out.reasons.wins='perf.wins ist negativ.'}
+  else if(out.wins==null)out.reasons.wins='Feld perf.wins fehlt oder ist keine Zahl.';
+ }
+ const g=grossFrom(s.pnlByToken,out.net,out.trades);
+ if(g.ok){out.grossProfit=g.profit;out.grossLoss=g.loss}else out.reasons.gross=g.why;
+ if(out.wins!=null&&out.trades!=null&&out.trades>0&&out.wins<=out.trades)out.winRate=out.wins/out.trades;
+ else if(out.trades===0)out.reasons.winRate='Keine realisierten Trades — Trefferquote nicht definiert.';
+ else if(!out.reasons.winRate)out.reasons.winRate=out.reasons.wins||out.reasons.trades||'Trefferquote nicht belegt.';
+ const h=holdInfo(s);if(h)out.hold=h;else out.reasons.hold='Keine Ein- und Ausstiegszeiten im Snapshot.';
+ return out;
+}
+function botMetric(id,label){
+ const b=D.snap?.bots?.find(x=>x.id===id);const row=(b?.metrics||[]).find(x=>Array.isArray(x)&&x[0]===label);
+ return row?row[1]:null;
+}
+function bzCell(k,label,value,sub,tip,state){
+ const empty=value==null;
+ return `<article class="bzcell${empty?' is-empty':''}" data-k="${k}" data-state="${state}" data-tip="${esc(tip)}"><small>${label}</small><b class="${empty?'':'mono'} ${state==='pos'?'up':state==='neg'?'down':''}">${empty?'Keine Daten':esc(value)}</b><span>${esc(sub)}</span></article>`;
+}
+function signState(v){return v>0?'pos':v<0?'neg':'zero'}
+function renderBilanz(){
+ const host=$('#bilanz'),sub=$('#bilSub');if(!host)return;const s=D.snap;if(!s)return;
+ const m=bilanzMetrics(s);
+ const mode=m.mode==='PAPER'?'PAPER · simuliert':m.mode?m.mode+' · Bot-Modus':'Modus: Keine Daten';
+ if(sub)setT(sub,mode+' · Beträge realisiert, nicht aus Wallet-Salden');
+ const profit=m.grossProfit==null?null:money(m.grossProfit);
+ const loss=m.grossLoss==null?null:money(m.grossLoss);
+ const net=m.net==null?null:money(m.net);
+ const trades=m.trades==null?null:countTxt(m.trades);
+ const rate=m.winRate==null?null:rateTxt(m.winRate);
+ const hold=m.hold?holdTxt(m.hold.ms):null;
+ const grossWhy=m.reasons.gross||'Summe aus pnlByToken.eur';
+ const cells=bzCell('grossProfit','Brutto-Gewinn',profit,m.grossProfit==null?grossWhy:(m.grossProfit===0?'Keine positiven Beträge · realisiert':'Summe positiver Beträge · realisiert'),'Brutto realisierter Gewinn in EUR. Quelle: positive pnlByToken.eur. Nicht aus Wallet-Salden.',m.grossProfit==null?'empty':signState(m.grossProfit))
+  +bzCell('grossLoss','Brutto-Verlust',loss,m.grossLoss==null?grossWhy:(m.grossLoss===0?'Keine negativen Beträge · realisiert':'Summe negativer Beträge · realisiert'),'Brutto realisierter Verlust in EUR. Quelle: negative pnlByToken.eur.',m.grossLoss==null?'empty':signState(m.grossLoss))
+  +bzCell('net','Netto-PnL',net,m.net==null?m.reasons.net:'realisiert · perf.totalEur','Netto realisiertes PnL in EUR. Quelle: perf.totalEur. Paper-Equity und Wallet-Salden zählen nicht.',m.net==null?'empty':signState(m.net))
+  +bzCell('trades','Ausgeführte Trades',trades,m.trades==null?m.reasons.trades:'realisiert · perf.trades · ohne Skips','Anzahl realisierter Trades. Quelle: perf.trades. Blockierte Signale und paper.skips zählen nicht.',m.trades==null?'empty':'num');
+ const subc=bzCell('winRate','Trefferquote',rate,m.winRate==null?m.reasons.winRate:`${countTxt(m.wins)} von ${countTxt(m.trades)} · perf.wins`,'Trefferquote aus perf.wins / perf.trades. Bei null Trades nicht definiert.',m.winRate==null?'empty':'num')
+  +bzCell('hold','Ø Haltedauer',hold,m.hold?('Quelle '+m.hold.src):m.reasons.hold,'Mittlere Haltedauer nur aus expliziten Zeiten. Sonst Keine Daten, nicht 0.',m.hold?'num':'empty');
+ let note='Quelle: perf.totalEur, pnlByToken[].eur, perf.trades, perf.wins. Realisiertes Ledger in EUR — nicht Paper-Equity, nicht Wallet-Salden, nicht counts.blocked.';
+ const skips=num(s.paper?.skips);if(skips!=null)note+=` paper.skips = ${countTxt(skips)} zählt nicht als Trade.`;
+ const a5=botMetric('A5','Echte Trades');if(typeof a5==='number')note+=` A5 echte Ausführungen: ${countTxt(a5)}.`;
+ const b3=botMetric('B3','Realisierte Trades');if(typeof b3==='number'&&m.trades!=null&&b3!==m.trades)note+=` B3 Realisierte Trades (${countTxt(b3)}) weicht von perf.trades ab.`;
+ if(Array.isArray(s.pnlByToken)&&m.trades!=null){const ts=s.pnlByToken.reduce((a,r)=>a+(num(r?.trades)||0),0);if(s.pnlByToken.some(r=>num(r?.trades)==null)||ts!==m.trades)note+=' Summe pnlByToken.trades ist nicht die Trade-Anzahl.'}
+ note+=' Unrealisiertes PnL ist nicht ausgewiesen.';
+ const html=`<div class="bzgrid">${cells}</div><div class="bzgrid bzsub">${subc}</div><p class="bznote">${esc(note)}</p>`;
+ if(host._h!==html){host.innerHTML=html;host._h=html}
+}
+
 /* ================= Seiten-Wechsel ================= */
-const PAGES={ueb:['uebersicht',renderUeb],ana:['analyse',renderAna],bots:['bots',renderBotsPage],kurse:['kurse',renderKurse]};
+const PAGES={ueb:['uebersicht',renderUeb],ana:['analyse',renderAna],bots:['bots',renderBotsPage],kurse:['kurse',renderKurse],bil:['bilanz',renderBilanz]};
 const PBYHASH=Object.fromEntries(Object.entries(PAGES).map(([k,v])=>[v[0],k]));
 let pgTok=0;
 function navBar(){const tp=$('#top');if(tp)document.documentElement.style.setProperty('--hh',tp.offsetHeight+'px');const on=$('#nav button.on'),u=$('#navbar');if(on&&u){u.style.width=on.offsetWidth+'px';u.style.transform=`translateX(${on.offsetLeft}px)`}}
@@ -760,7 +883,7 @@ document.addEventListener('keydown',e=>{
  else if(k==='ArrowRight')stepBot(1);else if(k==='ArrowLeft')stepBot(-1);
  else if(k==='s'||k==='S')toggleSound();else if(k==='?')$('#help').hidden=!$('#help').hidden;
  else if(k==='/'){e.preventDefault();$('#q').focus()}
- else if(k>='1'&&k<='4'){leaveDrawer();showPage(['ueb','ana','bots','kurse'][+k-1])}
+ else if(k>='1'&&k<='5'){leaveDrawer();showPage(['ueb','ana','bots','kurse','bil'][+k-1])}
  else if((k==='Enter'||k===' ')&&document.activeElement?.classList.contains('bot')){e.preventDefault();document.activeElement.click()}});
 document.addEventListener('pointermove',e=>{
  if(e.target.id==='laneCv'){const r=e.target.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let b=null,bd=11*11;for(const p of lpts){const d=(p.x-x)**2+(p.y-y)**2;if(d<bd){bd=d;b=p}}lHover=b;e.target.style.cursor=b?'pointer':'default';if(b)showTip(null,e.clientX,e.clientY,`${b.id} · ${dtM(b.e.t)} Uhr (${ago(b.e.t)})\n${b.e.sym?b.e.sym+' · ':''}${b.e.txt}`);else tipEl.hidden=true;return}
@@ -793,3 +916,6 @@ bgInit();ecgSize();buildMini();requestAnimationFrame(loop);
 binConnect();hlConnect();hlChange();
 if(innerWidth<1180)$('#pPrices').classList.add('min');
 initPage();initBotData();
+window.__bilanz=bilanzMetrics;
+window.__applyState=applyState;
+window.__snap=()=>D.snap;

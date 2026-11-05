@@ -7,7 +7,7 @@
 <meta name="description" content="Live-Dashboard der Pump.fun/Solana-Bots – nur Anzeige, keine Trades.">
 <meta name="theme-color" content="#000000">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Cpath d='M16 4l10 6v12l-10 6-10-6V10z' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23fff'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <canvas id="bg" aria-hidden="true"></canvas>
@@ -21,6 +21,7 @@
       <button data-act="page" data-v="ana"><i>2</i>Analyse &amp; Scouts</button>
       <button data-act="page" data-v="bots"><i>3</i>Bots &amp; Risiko</button>
       <button data-act="page" data-v="kurse"><i>4</i>Kurse</button>
+      <button data-act="page" data-v="bil"><i>5</i>Bilanz</button>
       <u id="navbar"></u>
     </nav>
     <div class="search"><input id="q" type="search" placeholder="Coin, Mint-Adresse oder Bot suchen …  ( / )" autocomplete="off" spellcheck="false" aria-label="Suche"><div class="qres" id="qres" hidden></div></div>
@@ -38,7 +39,7 @@
     <button class="chip" id="chipBot" data-act="goto" data-v="bots" data-tip="Zeigt ehrlich, ob die Bot-Daten per Live-Stream kommen oder nur als Snapshot (state.json, alle 30 s neu geladen)."><i class="ld"></i><span>Bot-Daten …</span></button>
     <button class="chip" id="chipPx" data-act="goto" data-v="kurse" data-tip="Kurs-Quelle für SOL, BTC, ETH &amp; Co."><i class="ld"></i><span>Kurse …</span></button>
     <button class="chip" id="chipSol" data-act="goto" data-v="bots" data-tip="Solana-WebSocket für Wallet-Bestände."><i class="ld"></i><span>Solana …</span></button>
-    <button class="chip hint" data-act="help" data-tip="Tastenkürzel anzeigen"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> Seiten · <kbd>/</kbd> Suche · <kbd>?</kbd></button>
+    <button class="chip hint" data-act="help" data-tip="Tastenkürzel anzeigen"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd><kbd>5</kbd> Seiten · <kbd>/</kbd> Suche · <kbd>?</kbd></button>
   </div>
 </header>
 
@@ -130,6 +131,14 @@
   </section>
 </section>
 
+<!-- 5 · BILANZ -->
+<section class="page" data-p="bil" id="pg-bil" hidden>
+  <div class="ptitle"><h1>Bilanz</h1><span class="sub" id="bilSub">Realisierte Ergebnisse</span></div>
+  <div class="bilanz" id="bilanz" aria-live="polite">
+    <p class="bznote"><b>Keine Daten</b> — Snapshot noch nicht geladen.</p>
+  </div>
+</section>
+
 </main>
 </div>
 
@@ -142,11 +151,11 @@
 <div class="toast" id="toast" hidden></div>
 <div class="modal" id="help" hidden data-act="helpclose"><div class="box">
   <h3>Tastenkürzel</h3>
-  <dl><dt>1 · 2 · 3 · 4</dt><dd>Seite wechseln: Übersicht · Analyse &amp; Scouts · Bots &amp; Risiko · Kurse</dd><dt>/</dt><dd>Suche (Coin, Mint, Bot)</dd><dt>← →</dt><dd>Vorheriger/nächster Bot im Detail-Fenster</dd><dt>Esc</dt><dd>Fenster schließen</dd><dt>S</dt><dd>Ton an/aus (Standard: aus)</dd><dt>?</dt><dd>Diese Hilfe</dd></dl>
+  <dl><dt>1 · 2 · 3 · 4 · 5</dt><dd>Seite wechseln: Übersicht · Analyse &amp; Scouts · Bots &amp; Risiko · Kurse · Bilanz</dd><dt>/</dt><dd>Suche (Coin, Mint, Bot)</dd><dt>← →</dt><dd>Vorheriger/nächster Bot im Detail-Fenster</dd><dt>Esc</dt><dd>Fenster schließen</dd><dt>S</dt><dd>Ton an/aus (Standard: aus)</dd><dt>?</dt><dd>Diese Hilfe</dd></dl>
   <p>Alle Zahlen stammen aus echten Quellen (Bot-Dateien, Binance, DexScreener, Solana). Fehlt etwas, steht dort „keine Daten“ oder „–“. Es gibt keine Trade-Funktion.</p>
 </div></div>
 <footer class="foot">Nur Anzeige – keine Anlageberatung · Charts: <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts™</a></footer>
-<script src="lightweight-charts.js?v=5"></script>
-<script src="app.js?v=5"></script>
+<script src="lightweight-charts.js?v=6"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

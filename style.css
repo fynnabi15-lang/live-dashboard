@@ -487,3 +487,42 @@ kbd{font:10px var(--mono);border:1px solid var(--line2);border-radius:3px;paddin
 .cn{font-size:10px;padding:1px 7px 1px 5px}
 .lane{height:82px}
 .pipe{height:186px}
+
+/* v6 — größere Navigation, Seite Bilanz */
+:root{--hh:156px}
+.trow{align-items:center;row-gap:6px}
+.nav{position:relative;display:flex;align-items:stretch;gap:4px;flex:1 0 100%;order:3;min-width:0;max-width:100%;min-height:44px;padding:2px 0 0}
+.nav button{flex:1 1 0;min-width:max(44px,max-content);min-height:44px;padding:0 16px;font-size:15px;line-height:1;letter-spacing:.02em;color:var(--dim);display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:8px;white-space:nowrap;transition:color .25s,background .25s}
+.nav button i{font:600 11px/1 var(--mono);font-style:normal;border:1px solid var(--faint);border-radius:4px;min-width:20px;height:20px;padding:0 4px;display:inline-grid;place-items:center}
+.nav button:hover{color:#fff;background:rgba(255,255,255,.06)}
+.nav button.on{color:#fff;background:rgba(255,255,255,.08)}
+.nav button.on i{background:#fff;color:#000;border-color:#fff}
+.nav u{pointer-events:none;bottom:0;height:2px}
+.bilanz{display:flex;flex-direction:column;gap:14px}
+.bzgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.bzgrid.bzsub{grid-template-columns:repeat(4,minmax(0,1fr))}
+.bzgrid.bzsub .bzcell{grid-column:span 2}
+.bzcell{position:relative;border:1px solid var(--line);border-radius:var(--r);background:rgba(10,10,10,.92);min-height:132px;padding:18px 16px 14px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.bzcell small{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.bzcell b{font:500 clamp(22px,2.1vw,40px)/1.15 var(--mono);letter-spacing:-.03em;word-break:break-word}
+.bzcell.is-empty b{font:500 clamp(18px,1.5vw,26px)/1.25 var(--sans);letter-spacing:.04em;color:#fff}
+.bzcell span{margin-top:auto;color:var(--dim);font-size:12px;line-height:1.4}
+.bznote{max-width:78ch;color:var(--dim);font-size:12.5px;line-height:1.5}
+.bznote b{color:#ddd;font-weight:600}
+@media (max-width:1180px){
+ :root{--hh:168px}
+ .nav{overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
+ .nav::-webkit-scrollbar{display:none}
+ .nav button{flex:0 0 auto;scroll-snap-align:start;font-size:14.5px;padding:0 14px}
+}
+@media (max-width:900px){
+ .bzgrid,.bzgrid.bzsub{grid-template-columns:1fr 1fr}
+ .bzgrid.bzsub .bzcell{grid-column:auto}
+ .bzcell{min-height:112px}
+}
+@media (max-width:640px){
+ .bzgrid,.bzgrid.bzsub{grid-template-columns:1fr}
+ .bzgrid.bzsub .bzcell{grid-column:auto}
+ .bzcell{min-height:0;padding:16px 14px}
+ .nav button{font-size:14px}
+}
