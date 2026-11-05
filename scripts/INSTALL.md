@@ -1,6 +1,57 @@
-# Safe exporter install
+# Safe one-shot export
 
-Do not resume the paused uploader (PID 401962, SIGSTOP). Do not point this script at the live `data` branch until the site that understands `schemaVersion` 1 is the published site, and until the owner approves an upload. PR2 (poll fix) stays a separate deployment.
+Do not resume the paused uploader (PID 401962, SIGSTOP). Do not run `push.py` for this dry-run. It refuses to upload unless `ALLOW_UPLOAD=1`, and that switch stays off until the owner approves a publish. This package does not rewrite git history. Old `data`-branch commits can still contain earlier tax-derived snapshots; deleting them is a separate owner decision.
+
+`peer-map.json` maps all 18 peers. Filename `Main.json` is MAIN and `trades.json` is TRADES. A file is accepted only when its filename (short alias or that peer's UUID) and any `botId` / `uuid` inside the file name the same peer. A trusted UUID found inside an unrelated filename is ignored. The audit fixture omitted some UUIDs because its helper context was narrower; the map here is the full trusted list.
+
+Raw telemetry files have no `actionKind`. A missing kind is not analysis or a trade and does not set `lastT`. `SCANNING`, `wartend`, `WAITING`, and `monitoring_idle` are status labels only. A summary may be a string or an array of strings. A1 `SCANNING` does not make the last DNUT signal the current target. A completed C3 run file can record a past scan; a peer-reported later run is not invented. Missing MAIN, B1, B3, C1, D2, D3, D4, and TRADES files stay `UNKNOWN`.
+
+## Command
+
+```bash
+export SHARED_DIR=/home/box/shared
+export OUT_DIR=/tmp/botpush-dryrun
+node export-state-safe.js
+```
+
+Required: `SHARED_DIR`. Optional: `OUT_DIR` (default `./site` next to the script). No token. No network.
+
+## Sources read
+
+Operational files under `SHARED_DIR`, only if present:
+
+- `telemetry/*.json` (short name or that peer's UUID)
+- `trading/signals-analyse.jsonl`
+- `trading/rug-checks.jsonl`
+- `trading/liquidity-checks.jsonl`
+- `trading/risk-decisions.jsonl`
+- `trading/execution-events.jsonl`
+- `trading/real/closed-trades.jsonl`
+- `trading/paper/paper-trades.jsonl`
+- `trading/whale-events.jsonl`
+- `trading/sentiment-checks.jsonl`
+- `trading/health/health-status.json`
+- `trading/health/health-log.jsonl`
+- `trading/backtests/runner-heartbeat.json`
+- `trading/backtests/data/harvest/run-log.jsonl`
+- `trading/backtests/paper-state.json` (only an explicit `PAPER` or `LIVE` mode)
+- `trading/launch-sniffer/runs/<latest completed>.json`
+- `trading/arbitration-decisions.jsonl`
+- `trading/monitor-events.jsonl`
+- `trading/portfolio-state.json` (status time only, no balances)
+- `trading/wallet-monitor/wallet-state.json` (public addresses only, no balances)
+- `tax/sync-status.json` (`last_updated`, `completeness`, `open_issues` only)
+
+Not read: `tax/tax-ledger.csv`, `tax/tax-ledger.jsonl`, `tax/fifo-lots.json`, tax corrections, private agent stores, or any absolute path named inside a telemetry file.
+
+## Local tests before the dry-run
+
+```bash
+node --test export-state-safe.test.js
+python3 -m unittest test_push.py
+```
+
+Then open `/tmp/botpush-dryrun/state.json` and confirm it has no `realized_result`, `cost_eur`, `fifo`, or `/home/`. `execution.*.verified` stays false and `closed` stays null until a book has `confirmation: true`, `closure: "validated"`, `fees: "complete"`, and for REAL a signature plus `blockTime`. `schemaVersion` and `verified` alone do not publish amounts.
 
 The archive did not contain peer UUID strings. `peer-map.json` therefore maps only the confirmed short names. Unknown UUID filenames are ignored. Add a UUID only after the owner confirms it belongs to that peer:
 

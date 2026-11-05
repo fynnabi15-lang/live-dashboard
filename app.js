@@ -179,8 +179,8 @@ const fmtVal=(c)=>{const v=c.value;if(v==null)return NODATA;const s=String(v);if
 
 /* ---------- Helfer: DOM ---------- */
 const setT=(el,t)=>{if(el&&el.textContent!==t)el.textContent=t};
-const PASSIVE_KIND=/^(status_check|config_prep|test)$/;
-const botSt=b=>{if(PASSIVE_KIND.test(b.actionKind||''))return['none',b.actionKind==='test'?'TEST':b.actionKind==='config_prep'?'VORBEREITET':'STATUS'];if(!b.lastT)return['none','WARTET'];const m=(Date.now()-b.lastT)/60000;return m<=15?['active','AKTIV']:m<=120?['calm','RUHIG']:['idle','INAKTIV']};
+const PASSIVE_KIND=/^(status_check|config_prep|test|journal)$/;
+const botSt=b=>{if(b.running===true&&!PASSIVE_KIND.test(b.actionKind||''))return['active','AKTIV'];if(PASSIVE_KIND.test(b.actionKind||''))return['none',b.actionKind==='test'?'TEST':b.actionKind==='config_prep'?'VORBEREITET':b.actionKind==='journal'?'JOURNAL':'STATUS'];if(b.status==='UNKNOWN'&&!b.lastT)return['none','UNBEKANNT'];if(!b.lastT)return['none','KEINE AKTION'];return['idle','LETZT'];};
 const bName=b=>b.name.replace(/^[A-D]\d\s*/,'')||b.name;
 const vcls=v=>!v?'':/^(BUY|STRONG|OK|PASS|ABGEGLICHEN|BEREIT|HIGH)/i.test(v)||/bonding_9/.test(v)?'hi':/(BLOCK|SKIP|ALARM|DEGRADED|WARN|ABWEICH|DATEN|FAIL)/i.test(v)?'lo':'';
 const symOf=m=>D.dex[m]?.sym||D.snap?.coins.find(c=>c.mint===m)?.symbol||D.snap?.radar.find(c=>c.mint===m)?.symbol||short(m);
@@ -210,7 +210,7 @@ function renderBots(first){
   bs.forEach(b=>{const a=document.createElement('article');a.className='bot';a.tabIndex=0;a.dataset.act='bot';a.dataset.id=b.id;a.style.animationDelay=(delay++*45)+'ms';a.innerHTML=botHTML(b);gc.appendChild(a)});host.appendChild(sec)}}
  for(const b of s.bots){const el=$(`.bot[data-id="${b.id}"]`,host);if(el)updBot(el,b)}
  const act=s.bots.filter(b=>botSt(b)[0]==='active').length;
- setT($('#botsSub'),`${act} von ${s.bots.length} aktiv · klicke einen Bot für alle Details`);
+ setT($('#botsSub'),`${act} mit belegter laufender Aktion · ${s.bots.length} Karten · fehlende Datei bleibt unbekannt`);
 }
 function updBot(el,b){
  const [st,stt]=botSt(b);el.dataset.st=st;const r=b.reasoning;
@@ -778,6 +778,8 @@ function countField(v){if(v==null)return {ok:true,v:null};const n=num(v);return 
 function moneyField(v){if(v==null)return {ok:true,v:null};const n=num(v);return n==null?{ok:false}:{ok:true,v:n}}
 function readBook(book,venue,prefix){
  if(!book||book.verified!==true||book.coverage!=='complete'||book.venue!==venue)return null;
+ if(book.closure!=='validated'||book.fees!=='complete'||book.confirmation!==true)return null;
+ if(venue==='REAL'&&(typeof book.signature!=='string'||book.signature.length<32||!isoStamp(book.blockTime)))return null;
  if(!pathOk(book.source,prefix))return null;
  const observedAt=isoStamp(book.observedAt);if(!observedAt)return null;
  if(!Object.prototype.hasOwnProperty.call(book,'lastActionAt'))return null;
@@ -794,7 +796,7 @@ function tradeReport(s){
  const real=ex?readBook(ex.real,'REAL','trading/real/'):null;
  const paper=ex?readBook(ex.paper,'PAPER','trading/paper/'):null;
  let positions=null;const pb=s&&s.schemaVersion===1?s.positionBook:null;
- if(pb&&pb.verified===true&&pb.coverage==='complete'&&pathOk(pb.source,'trading/positions/')&&isoStamp(pb.observedAt)){
+ if(pb&&pb.verified===true&&pb.coverage==='complete'&&pb.confirmation===true&&pb.closure==='validated'&&pathOk(pb.source,'trading/positions/')&&isoStamp(pb.observedAt)){
   const count=countField(pb.count);
   if(count.ok)positions={count:count.v,observedAt:pb.observedAt,source:pb.source};
  }

@@ -24,5 +24,24 @@
     "Umsätzte": "TRADES",
     "Umsaetze": "TRADES"
   },
-  "uuids": {}
+  "uuids": {
+    "d67c936f-f5de-4f48-83fd-a7abb3c99ecb": "MAIN",
+    "241d7e32-e446-4528-b814-ecfe08d3501f": "A1",
+    "1648ef7a-6ad7-4704-a362-b11c901e4ebb": "A2",
+    "895ed8ca-e176-4828-b483-2f78e29425b2": "A3",
+    "e90209bd-abe4-4fae-a172-a7301a3e8bda": "A4",
+    "3dc22641-d6c2-466a-ab7f-f91ef973695d": "A5",
+    "d6874fef-206e-4b67-bd35-0fe14882f4d9": "B1",
+    "8f501974-5d4a-41b9-98ed-25477340882f": "B2",
+    "01cd8b4c-2d83-402d-b4b0-23bd5e16c728": "B3",
+    "db26118f-5e0a-4bc6-bde2-96588ac3a737": "C1",
+    "e55514c7-aed4-44a1-b9af-4c34397706c4": "C2",
+    "09aa8032-2f1e-4041-9c84-07f714946395": "C3",
+    "8e52d2a5-05fa-424f-abca-a87d386000bb": "D1",
+    "432fe264-09a9-4678-abeb-a30614360dd5": "D2",
+    "1ea2f893-a8cf-42e5-acf7-7ffbfa96b06c": "D3",
+    "23d2da88-54e7-49f2-80ae-5b4d66d01707": "D4",
+    "07ab2ce6-4a25-4c6c-86ac-1cef1569c335": "D5",
+    "5f63444a-8bbb-4e11-b9b7-3c391a37a100": "TRADES"
+  }
 }

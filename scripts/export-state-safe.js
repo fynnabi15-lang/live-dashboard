@@ -24,12 +24,15 @@ const PEERS = [
   ['D5', 'D5', 'Infra', 'D5', 'Unbekannt, bis eine eigene Telemetrie-Datei existiert.'],
   ['TRADES', 'Trades', 'Support', 'Ausführungen', 'Kein Sammelergebnis aus der Steuer. Nur ein geprüftes Buch.']
 ];
-const ACTION = new Set(['analysis', 'risk', 'trade', 'scan', 'health', 'harvest', 'arbitration', 'journal', 'status_check', 'config_prep', 'test', 'unknown']);
-const PASSIVE = new Set(['status_check', 'config_prep', 'test', 'unknown']);
+const ACTION = new Set(['analysis', 'risk', 'trade', 'scan', 'health', 'harvest', 'arbitration', 'journal', 'status_check', 'config_prep', 'test']);
+const KIND_ALIAS = { status_read: 'status_check', config_preparation: 'config_prep', wallet_check_start: 'status_check', scan_start_reported: 'status_check', none: null, unverified_historical_action: null };
+const PASSIVE = new Set(['status_check', 'config_prep', 'test', 'journal']);
+const FILE_ACTION = new Set(['analysis', 'risk', 'trade', 'scan', 'health', 'harvest', 'arbitration']);
 const VERDICT = new Set(['BUY', 'STRONG_BUY', 'MONITOR', 'SKIP', 'BLOCK', 'PASS', 'OK', 'ERROR']);
 const STATUS = {
-  waiting: 'WAITING', waiting_rate_limit: 'WAITING_RATE_LIMIT', idle: 'IDLE', active: 'ACTIVE',
-  degraded: 'DEGRADED', ok: 'OK', unknown: 'UNKNOWN', error: 'ERROR', monitoring_idle: 'MONITORING_IDLE'
+  waiting: 'WAITING', wartend: 'WAITING', waiting_rate_limit: 'WAITING_RATE_LIMIT', idle: 'IDLE',
+  scanning: 'SCANNING', active: 'ACTIVE', degraded: 'DEGRADED', ok: 'OK', unknown: 'UNKNOWN',
+  error: 'ERROR', monitoring_idle: 'MONITORING_IDLE'
 };
 const SECRET = /api[_-]?key|secret|token|bearer|ghp_|github_pat_|private[_-]?key|BEGIN |sk-|xox[baprs]-|\/home\/|eyJ[A-Za-z0-9_-]{8,}/i;
 
@@ -75,7 +78,7 @@ function build(shared, opt = {}) {
   const bots = Object.fromEntries(PEERS.map(([id, name, group, title, role]) => [id, {
     id, botId: id, name, title, group, role,
     lastT: null, lastActionAt: null, observedAt: null, sourceUpdatedAt: null,
-    actionKind: null, origin: null, status: 'UNKNOWN', verified: false,
+    actionKind: null, origin: null, status: 'UNKNOWN', verified: false, running: false,
     task: null, coin: null, reasoning: null, metrics: [], recent: [], files: []
   }]));
   const events = [];
@@ -97,9 +100,9 @@ function build(shared, opt = {}) {
   };
 
   const sA = signals.slice().sort((a, b) => (ms(b.ts) || 0) - (ms(a.ts) || 0))[0];
-  if (sA && ms(sA.ts)) {
+    if (sA && ms(sA.ts)) {
     const v = verdictOf(sA.verdict) || verdictOf(sA.status);
-    act('A1', ms(sA.ts), 'analysis', `Bewertet ${screen(sA.symbol, 16) || 'Coin'}: ${v || 'ohne Urteil'}`, coinOf(sA.mint, sA.symbol), 'trading/signals-analyse.jsonl');
+    act('A1', ms(sA.ts), 'analysis', `Letztes Signal ${screen(sA.symbol, 16) || 'Coin'}: ${v || 'ohne Urteil'}`, null, 'trading/signals-analyse.jsonl');
     bots.A1.reasoning = { verdict: v, badge: null, confidence: typeof sA.confidence === 'number' ? sA.confidence : null, reasons: codes(sA.reason_codes), risks: [], text: null };
     bots.A1.sourceUpdatedAt = mtime('trading/signals-analyse.jsonl');
     signals.slice(-8).reverse().forEach(s => pushEv(ms(s.ts), 'A1', 'analysis', s.symbol, `${verdictOf(s.verdict) || 'Signal'} ${codes(s.reason_codes).join(' ')}`.trim(), s.mint));
@@ -192,17 +195,15 @@ function build(shared, opt = {}) {
   for (const [id, raw] of Object.entries(tel)) {
     const b = bots[id];
     if (!b || !raw) continue;
-    if (!b.observedAt) b.observedAt = raw.observedAt;
-    if (raw.status) b.status = raw.status;
+    b.observedAt = raw.observedAt || b.observedAt;
+    if (raw.sourceUpdatedAt) b.sourceUpdatedAt = raw.sourceUpdatedAt;
+    if (raw.status && raw.status !== 'UNKNOWN') b.status = raw.status;
     if (!b.origin) b.origin = 'self_report';
-    if (!b.actionKind && raw.actionKind) b.actionKind = raw.actionKind;
-    if (!b.lastActionAt && raw.lastActionAt && raw.actionKind) {
-      b.lastActionAt = raw.lastActionAt;
-      b.actionKind = raw.actionKind;
-      if (!PASSIVE.has(raw.actionKind)) b.lastT = ms(raw.lastActionAt);
-      if (!b.task && raw.summary) b.task = kindPrefix(raw.actionKind) + raw.summary;
-    } else if (!b.task && raw.summary && PASSIVE.has(raw.actionKind || '')) b.task = kindPrefix(raw.actionKind) + raw.summary;
+    if (raw.actionKind && b.origin !== 'file_event') b.actionKind = raw.actionKind;
+    if (raw.summary && !b.task) b.task = (kindPrefix(raw.actionKind) + raw.summary).trim();
+    if ((b.status === 'SCANNING' || b.status === 'WAITING_RATE_LIMIT') && id === 'A1') b.coin = null;
     b.verified = false;
+    b.running = false;
   }
   for (const b of Object.values(bots)) {
     if (!b.status || b.status === 'UNKNOWN') b.status = 'UNKNOWN';
@@ -262,16 +263,28 @@ function walletAddrs(wst) {
   if (wst && wst.wallets) { take('Haupt-Wallet', wst.wallets.main && wst.wallets.main.address); take('Trading-Wallet', wst.wallets.trading && wst.wallets.trading.address); }
   return out;
 }
-function resolvePeer(stem, declared) {
-  const id = MAP.aliases[stem] || MAP.uuids[stem];
-  if (!id) return null;
-  if (typeof declared === 'string') {
-    const want = MAP.aliases[declared] || MAP.uuids[declared];
-    if (want && want !== id) return null;
-    if (!want && declared !== id && !MAP.uuids[stem]) return null;
-  }
-  return id;
+function canonId(value) {
+  if (typeof value !== 'string' || !value) return null;
+  const key = value.trim();
+  return MAP.aliases[key] || MAP.uuids[key.toLowerCase()] || null;
 }
+function resolvePeer(stem, raw) {
+  const fileId = canonId(stem);
+  if (!fileId) return null;
+  const body = raw && typeof raw === 'object' ? raw : {};
+  const name = body.botId || body.peer || null;
+  if (typeof name === 'string' && name.trim()) {
+    const declared = canonId(name);
+    if (declared !== fileId) return null;
+  }
+  const uuid = body.uuid || body.peerUuid || (isUuid(body.id) ? body.id : null);
+  if (uuid) {
+    if (canonId(uuid) !== fileId) return null;
+    if (MAP.uuids[String(stem).toLowerCase()] && String(stem).toLowerCase() !== String(uuid).toLowerCase()) return null;
+  }
+  return fileId;
+}
+function isUuid(v) { return typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v); }
 function loadTelemetry(shared) {
   const dir = path.join(shared, 'telemetry');
   let names = [];
@@ -281,20 +294,33 @@ function loadTelemetry(shared) {
     if (!name.endsWith('.json')) continue;
     const stem = name.slice(0, -5);
     let raw; try { raw = JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')); } catch { continue; }
-    const id = resolvePeer(stem, raw.botId || raw.id);
+    const id = resolvePeer(stem, raw);
     if (!id) continue;
-    const status = STATUS[String(raw.status || '').toLowerCase()] || 'UNKNOWN';
-    const actionKind = ACTION.has(raw.actionKind) ? raw.actionKind : 'unknown';
+    const status = mapStatus(raw.status);
+    const actionKind = mapKind(raw.actionKind);
     out[id] = {
       observedAt: isoOrNull(raw.observedAt),
-      lastActionAt: isoOrNull(raw.lastActionAt),
       sourceUpdatedAt: isoOrNull(raw.sourceUpdatedAt),
       status, actionKind,
-      summary: screenText(raw.summary || raw.task),
+      summary: screenSummary(raw.summary),
       verdict: VERDICT.has(raw.verdict) ? raw.verdict : null
     };
   }
   return out;
+}
+function mapStatus(v) {
+  const s = String(v || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return STATUS[s] || 'UNKNOWN';
+}
+function mapKind(v) {
+  if (v == null || v === '') return null;
+  if (Object.prototype.hasOwnProperty.call(KIND_ALIAS, v) && KIND_ALIAS[v] == null) return null;
+  const k = KIND_ALIAS[v] || v;
+  return ACTION.has(k) ? k : null;
+}
+function screenSummary(v) {
+  if (Array.isArray(v)) return screenText(v.filter(x => typeof x === 'string').join(' · '));
+  return typeof v === 'string' ? screenText(v) : null;
 }
 function isoOrNull(v) { const t = Date.parse(v); return Number.isFinite(t) ? new Date(t).toISOString() : null; }
 function screenText(s) {

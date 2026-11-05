@@ -93,6 +93,9 @@ def cycle(export_code, raw, request, url, sha, last_hash):
     return sha, digest, 'pushed'
 
 def main():
+    if os.environ.get('ALLOW_UPLOAD') != '1':
+        print('upload disabled; dry-run is node export-state-safe.js only', flush=True)
+        return 2
     token = os.environ['GITHUB_DASH_TOKEN']
     url = f'https://api.github.com/repos/{REPO}/contents/state.json'
     headers = {'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'User-Agent': 'bot-push'}
