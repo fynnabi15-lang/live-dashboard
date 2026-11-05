@@ -3,66 +3,134 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>BOT·COCKPIT – Live</title>
+<title>GROK COCKPIT – Live</title>
 <meta name="description" content="Live-Dashboard der Pump.fun/Solana-Bots – nur Anzeige, keine Trades.">
 <meta name="theme-color" content="#000000">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Cpath d='M16 4l10 6v12l-10 6-10-6V10z' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23fff'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <canvas id="bg" aria-hidden="true"></canvas>
 <div class="grid" aria-hidden="true"></div><div class="scan" aria-hidden="true"></div>
 
-<div class="app">
-<header class="top">
-  <div class="brand"><svg viewBox="0 0 32 32" width="22" height="22"><path d="M16 3l11 6.5v13L16 29 5 22.5v-13z" fill="none" stroke="#fff" stroke-width="1.5"/><circle cx="16" cy="16" r="3.2" fill="#fff" class="core"/></svg><b>BOT<i>·</i>COCKPIT</b><span class="ro" data-tip="Dieses Dashboard ist reine Anzeige: keine Trade-Buttons, keine Wallet-Verbindung.">NUR ANZEIGE</span></div>
-  <div class="chips">
-    <button class="chip" id="chipBot" data-act="src" data-tip="Zeigt ehrlich, ob die Bot-Daten per Live-Stream kommen oder nur als Snapshot (state.json)."><i class="ld"></i><span>Bot-Daten …</span></button>
-    <button class="chip" id="chipPx" data-act="src" data-tip="Kurs-Quelle für SOL, BTC, ETH & Co."><i class="ld"></i><span>Kurse …</span></button>
-    <button class="chip" id="chipSol" data-act="src" data-tip="Solana-WebSocket für Wallet-Bestände."><i class="ld"></i><span>Solana …</span></button>
+<header class="top" id="top">
+  <div class="trow">
+    <div class="brand"><svg viewBox="0 0 32 32" width="24" height="24"><path d="M16 3l11 6.5v13L16 29 5 22.5v-13z" fill="none" stroke="#fff" stroke-width="1.5"/><circle cx="16" cy="16" r="3.2" fill="#fff" class="core"/></svg><b>GROK</b><i>COCKPIT</i><span class="ro" data-tip="Reine Anzeige – es gibt keine Kauf-/Verkauf-Buttons.">NUR ANZEIGE</span></div>
+    <nav class="nav" id="nav" aria-label="Seiten">
+      <button data-act="page" data-v="ueb" class="on"><i>1</i>Übersicht</button>
+      <button data-act="page" data-v="ana"><i>2</i>Analyse &amp; Scouts</button>
+      <button data-act="page" data-v="bots"><i>3</i>Bots &amp; Risiko</button>
+      <button data-act="page" data-v="kurse"><i>4</i>Kurse</button>
+      <u id="navbar"></u>
+    </nav>
+    <div class="search"><input id="q" type="search" placeholder="Coin, Mint-Adresse oder Bot suchen …  ( / )" autocomplete="off" spellcheck="false" aria-label="Suche"><div class="qres" id="qres" hidden></div></div>
+    <div class="tools">
+      <span class="clk mono" id="clock" data-tip="Berliner Zeit">--:--:--</span>
+      <span class="ses mono" id="session" data-tip="So lange schaust du schon zu (Sitzungs-Timer).">00:00:00</span>
+      <button class="ibtn" id="soundBtn" data-act="sound" data-tip="Ton bei neuen Signalen (S)" aria-label="Ton">♪<s></s></button>
+      <button class="ibtn" data-act="help" data-tip="Tastenkürzel (?)" aria-label="Hilfe">?</button>
+    </div>
   </div>
-  <div class="tools">
-    <span class="clk mono" id="clock" data-tip="Berliner Zeit">--:--:--</span>
-    <span class="ses mono" id="session" data-tip="So lange schaust du schon zu (Sitzungs-Timer).">00:00:00</span>
-    <button class="ibtn" id="soundBtn" data-act="sound" data-tip="Ton bei neuen Signalen (S)" aria-label="Ton">♪<s></s></button>
-    <button class="ibtn" data-act="help" data-tip="Tastenkürzel (?)" aria-label="Hilfe">?</button>
+  <div class="srow" id="srow">
+    <button class="chip a1chip" id="chipA1" data-act="a1open" data-s="off" data-tip="Zeigt, welchen Coin der Analyse-Bot A1 zuletzt bewertet hat. Klick öffnet die A1-Analyse."><i class="ld"></i><span>A1 …</span></button>
+    <button class="chip" id="chipMode" data-act="goto" data-v="bots" data-tip="Handelsmodus. PAPER = nur simuliert, es wird nichts echt gekauft."><i class="ld"></i><span>Modus …</span></button>
+    <button class="chip" id="chipHealth" data-act="goto" data-v="bots" data-tip="System-Gesundheit laut Health-Bot D2."><i class="ld"></i><span>Health …</span></button>
+    <button class="chip" id="chipBot" data-act="goto" data-v="bots" data-tip="Zeigt ehrlich, ob die Bot-Daten per Live-Stream kommen oder nur als Snapshot (state.json, alle 30 s neu geladen)."><i class="ld"></i><span>Bot-Daten …</span></button>
+    <button class="chip" id="chipPx" data-act="goto" data-v="kurse" data-tip="Kurs-Quelle für SOL, BTC, ETH &amp; Co."><i class="ld"></i><span>Kurse …</span></button>
+    <button class="chip" id="chipSol" data-act="goto" data-v="bots" data-tip="Solana-WebSocket für Wallet-Bestände."><i class="ld"></i><span>Solana …</span></button>
+    <button class="chip hint" data-act="help" data-tip="Tastenkürzel anzeigen"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> Seiten · <kbd>/</kbd> Suche · <kbd>?</kbd></button>
   </div>
 </header>
 
-<aside class="col left">
-  <section class="panel tabs" id="pTabs">
-    <div class="ph"><nav class="tabbar"><button class="on" data-act="tab" data-v="sys">System</button><button data-act="tab" data-v="risk">Risiko</button><button data-act="tab" data-v="src">Quellen</button></nav></div>
-    <div class="tab" data-t="sys"><canvas id="ecg" height="56"></canvas><div class="hbrow" id="hbrow"></div><div class="mini" id="sysmini"></div></div>
-    <div class="tab" data-t="risk" hidden><div id="risk"></div></div>
-    <div class="tab" data-t="src" hidden><div id="srcs"></div></div>
+<div class="shell">
+<aside class="rail" id="rail">
+  <section class="panel puls" id="pPuls">
+    <div class="ph"><h2>System-Puls</h2><span class="sub mono" id="pulsSub"></span></div>
+    <canvas id="ecg" height="46"></canvas>
+    <div class="hbrow" id="hbrow"></div>
   </section>
   <section class="panel prices" id="pPrices">
-    <div class="ph"><h2>Live-Kurse</h2><span class="sub mono" id="pxSub">…</span></div>
+    <div class="ph"><h2>Live-Kurse</h2><span class="sub mono" id="pxSub">…</span><button class="pmin" data-act="minprices" aria-label="Kurse ein-/ausklappen" data-tip="Ein-/ausklappen">–</button></div>
     <div class="plist" id="plist"></div>
   </section>
 </aside>
 
-<main class="col center" id="main">
+<main class="pages" id="pages">
+
+<!-- 1 · ÜBERSICHT -->
+<section class="page on" data-p="ueb" id="pg-ueb">
+  <div class="ptitle"><h1>Übersicht</h1><span class="sub">Alles Wichtige auf einen Blick – Details stehen auf den anderen Seiten.</span></div>
   <div class="kpis" id="kpis"></div>
+  <div class="nowrow" id="nowTiles"></div>
   <section class="panel" id="pPipe">
-    <div class="ph"><h2>Pipeline</h2><span class="sub">Wiedergabe der letzten Signale aus dem Bot-Log</span></div>
+    <div class="ph"><h2>Pipeline-Fluss</h2><span class="sub">Letzte Signale wandern von Scout bis Sniper – gestoppte Coins bleiben mit ✕ stehen</span></div>
     <div class="pipe" id="pipe"></div>
   </section>
-  <section class="mainhead"><h1>Was die Bots gerade tun</h1><span class="sub" id="botsSub"></span></section>
-  <div id="bots"></div>
-</main>
-
-<aside class="col right">
+  <section class="panel" id="pLanes">
+    <div class="ph"><h2>Wer macht gerade was</h2><div class="seg" id="laneRange"><button data-act="lrange" data-v="1">1 Std</button><button data-act="lrange" data-v="6" class="on">6 Std</button><button data-act="lrange" data-v="24">24 Std</button></div></div>
+    <div class="lanewrap"><canvas id="laneCv"></canvas></div>
+    <div class="lnote2">Jeder Punkt ist eine echte Aktion aus dem Bot-Log. Fahre darüber für Details, klicke für den Coin. Bots ohne Zeitstempel im Log (B1–B3, D1, D3) stehen auf „Bots &amp; Risiko“.</div>
+  </section>
   <section class="panel feed" id="pFeed">
     <div class="ph"><h2>Live-Feed</h2><span class="sub mono" id="feedSub"></span></div>
     <div class="flist" id="feed"></div>
   </section>
-  <section class="panel radar" id="pRadar">
-    <div class="ph"><h2>Signal-Radar</h2><span class="sub mono" id="radSub"></span></div>
-    <canvas id="radar"></canvas>
-    <div class="rlist" id="rlist"></div>
+</section>
+
+<!-- 2 · ANALYSE & SCOUTS -->
+<section class="page" data-p="ana" id="pg-ana" hidden>
+  <div class="ptitle"><h1>Analyse &amp; Scouts</h1><div class="seg big" id="anaSeg"><button data-act="sec" data-v="a1" class="on">Analyse-Bot A1</button><button data-act="sec" data-v="scouts">Scouts</button><button data-act="sec" data-v="journey">Coin-Reise</button></div></div>
+  <div class="sect" id="sec-a1">
+    <div id="a1cur"></div>
+    <div class="split">
+      <section class="panel"><div class="ph"><h2>Letzte Analysen</h2><span class="sub mono" id="a1sub"></span></div><div class="alist" id="a1list"></div></section>
+      <section class="panel adet"><div class="ph"><h2>Details der Analyse</h2><span class="sub mono" id="a1detSub"></span></div><div id="a1det" class="pbody"></div></section>
+    </div>
+  </div>
+  <div class="sect" id="sec-scouts" hidden>
+    <div class="nowrow3" id="scNow"></div>
+    <div class="split2">
+      <section class="panel"><div class="ph"><h2>Scout-Details</h2><div class="seg" id="scTabs"><button data-act="sctab" data-v="C1" class="on">C1 Whale</button><button data-act="sctab" data-v="C2">C2 Sentiment</button><button data-act="sctab" data-v="C3">C3 Launch Sniffer</button></div></div><div id="scBody" class="pbody"></div></section>
+      <section class="panel radar" id="pRadar"><div class="ph"><h2>Signal-Radar</h2><span class="sub mono" id="radSub"></span></div><canvas id="radar"></canvas><div class="rlist" id="rlist"></div></section>
+    </div>
+  </div>
+  <div class="sect" id="sec-journey" hidden>
+    <div class="split">
+      <section class="panel"><div class="ph"><h2>Coins</h2><span class="sub mono" id="jsub"></span></div><div class="alist" id="jlist"></div></section>
+      <section class="panel adet"><div class="ph"><h2>Weg durch die Pipeline</h2><span class="sub mono" id="jdetSub"></span></div><div id="jdet" class="pbody"></div></section>
+    </div>
+  </div>
+</section>
+
+<!-- 3 · BOTS & RISIKO -->
+<section class="page" data-p="bots" id="pg-bots" hidden>
+  <div class="ptitle"><h1>Bots &amp; Risiko</h1><span class="sub" id="botsSub"></span></div>
+  <div class="split3">
+    <div id="bots"></div>
+    <div class="side">
+      <section class="panel"><div class="ph"><h2>Risiko</h2></div><div class="pbody" id="risk"></div></section>
+      <section class="panel"><div class="ph"><h2>System-Gesundheit</h2><span class="sub mono" id="healthSub"></span></div><div class="pbody" id="health"></div></section>
+      <section class="panel"><div class="ph"><h2>Wallets</h2><span class="sub mono" id="walSub"></span></div><div class="pbody" id="wallets"></div></section>
+      <section class="panel"><div class="ph"><h2>Datenquellen</h2></div><div class="pbody" id="srcs"></div></section>
+    </div>
+  </div>
+</section>
+
+<!-- 4 · KURSE -->
+<section class="page" data-p="kurse" id="pg-kurse" hidden>
+  <div class="ptitle"><h1>Kurse</h1><span class="sub mono" id="kSub">Binance WebSocket · DexScreener alle 5 s</span></div>
+  <div class="kcards" id="kcards"></div>
+  <section class="panel" id="pKchart">
+    <div class="ph"><h2 id="kchTitle">Chart</h2><button class="btn sm" data-act="kdetail" id="kchDetail">Details ›</button></div>
+    <div class="kchbody"><div class="tfbar" id="ktf"></div><div class="chart tall" id="kchart"><div class="msg">Lade Chart …</div></div><div class="sec mono" id="kinfo" style="font-size:11px;margin-top:5px"></div></div>
   </section>
-</aside>
+  <section class="panel">
+    <div class="ph"><h2>Coins der Bots · DexScreener</h2><span class="sub mono" id="mSub"></span></div>
+    <div class="mwrap"><table class="mtab" id="mtab"><thead><tr><th>Coin</th><th>Adresse (Mint)</th><th class="r">Preis</th><th class="r">5 Min</th><th class="r">1 Std</th><th class="r">24 Std</th><th class="r">Liquidität</th><th class="r">Market Cap</th><th class="r">Vol. 1 Std</th></tr></thead><tbody></tbody></table></div>
+  </section>
+</section>
+
+</main>
 </div>
 
 <div class="veil" id="veil" hidden data-act="close"></div>
@@ -71,13 +139,14 @@
   <div class="db" id="dbody"></div>
 </aside>
 <div class="tip" id="tip" hidden></div>
+<div class="toast" id="toast" hidden></div>
 <div class="modal" id="help" hidden data-act="helpclose"><div class="box">
   <h3>Tastenkürzel</h3>
-  <dl><dt>1 · 2 · 3</dt><dd>Springe zu Bots · Live-Feed · Kursen</dd><dt>← →</dt><dd>Vorheriger/nächster Bot im Detail-Fenster</dd><dt>Esc</dt><dd>Detail-Fenster schließen</dd><dt>S</dt><dd>Ton an/aus (Standard: aus)</dd><dt>?</dt><dd>Diese Hilfe</dd></dl>
-  <p>Alle Zahlen stammen aus echten Quellen (Bot-Dateien, Binance, DexScreener, Solana). Fehlt etwas, steht dort „–“. Es gibt keine Trade-Funktion.</p>
+  <dl><dt>1 · 2 · 3 · 4</dt><dd>Seite wechseln: Übersicht · Analyse &amp; Scouts · Bots &amp; Risiko · Kurse</dd><dt>/</dt><dd>Suche (Coin, Mint, Bot)</dd><dt>← →</dt><dd>Vorheriger/nächster Bot im Detail-Fenster</dd><dt>Esc</dt><dd>Fenster schließen</dd><dt>S</dt><dd>Ton an/aus (Standard: aus)</dd><dt>?</dt><dd>Diese Hilfe</dd></dl>
+  <p>Alle Zahlen stammen aus echten Quellen (Bot-Dateien, Binance, DexScreener, Solana). Fehlt etwas, steht dort „keine Daten“ oder „–“. Es gibt keine Trade-Funktion.</p>
 </div></div>
 <footer class="foot">Nur Anzeige – keine Anlageberatung · Charts: <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts™</a></footer>
-<script src="lightweight-charts.js"></script>
-<script src="app.js"></script>
+<script src="lightweight-charts.js?v=4"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
