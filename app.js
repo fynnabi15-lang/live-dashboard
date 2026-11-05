@@ -12,7 +12,7 @@ const berlin=(t,o)=>new Date(t).toLocaleString('de-DE',{timeZone:'Europe/Berlin'
 const tmS=t=>berlin(t,{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 const tmM=t=>berlin(t,{hour:'2-digit',minute:'2-digit'});
 const dtM=t=>berlin(t,{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-const ago=t=>{if(!t)return'–';const s=Math.max(0,(Date.now()-t)/1000);return s<5?'gerade eben':s<60?'vor '+Math.floor(s)+' s':s<3600?'vor '+Math.floor(s/60)+' Min':s<86400?'vor '+Math.floor(s/3600)+' Std '+Math.floor(s%3600/60)+' Min':'vor '+Math.floor(s/86400)+' Tg'};
+const ago=t=>{if(!t)return'–';const tn=typeof t==='number'?t:(t instanceof Date?t.getTime():Date.parse(t));if(!isFinite(tn))return'–';const s=Math.max(0,(Date.now()-tn)/1000);return s<5?'gerade eben':s<60?'vor '+Math.floor(s)+' s':s<3600?'vor '+Math.floor(s/60)+' Min':s<86400?'vor '+Math.floor(s/3600)+' Std '+Math.floor(s%3600/60)+' Min':'vor '+Math.floor(s/86400)+' Tg'};
 const short=m=>m?m.slice(0,4)+'…'+m.slice(-4):'';
 const hash=s=>{let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return(h>>>0)/4294967295};
 const REASON={LIQUIDITY_TOO_LOW:'Liquidität zu niedrig',VERDICT_NOT_BUY:'Urteil war kein Kauf',RUG_RISK:'Rug-Risiko',RUGCHECK_FAIL:'RugCheck nicht bestanden',SENTIMENT_BLOCK:'Sentiment blockiert',DATA_MISSING:'Daten fehlen',STATUS_NOT_PASS:'Status nicht PASS',ROUTE_UNKNOWN:'Handelsroute unbekannt'};
