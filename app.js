@@ -28,7 +28,7 @@ const D={snap:null,t0:Date.now(),px:{},dex:{},dexT:0,wal:{},spark:{},tickCount:0
  src:{bin:{mode:null,t:0,err:null,wsFail:0},hl:{ok:false,t:0},dex:{ok:null,t:0,err:null},sol:{mode:null,t:0},stream:{}},
  stream:{url:null,open:false,lastMsg:0,lastState:0,seq:0,clients:null,fails:0,es:null},stateAt:0,evKeys:new Set(),seen:false,extra:new Set()};
 const UI={drawer:null,page:'ueb',sec:'a1',sc:'C1',a1sel:null,jsel:null,lr:6,kch:{type:'cex',sym:'SOL'}};
-const jget=async(u,o)=>{const c=new AbortController(),t=setTimeout(()=>c.abort(),12000);try{const r=await fetch(u,{...o,signal:c.signal});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}finally{clearTimeout(t)}};
+const jget=async(u,o={})=>{const ms=o.timeout||12000;const {timeout:drop,...rest}=o;void drop;const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);try{const r=await fetch(u,{...rest,signal:c.signal});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}finally{clearTimeout(t)}};
 const jpost=(u,b)=>jget(u,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});
 
 /* ---------- Bot-Daten: Stream (SSE) oder Snapshot ---------- */
@@ -50,28 +50,64 @@ function openStream(){
  es.addEventListener('ping',e=>{try{const p=JSON.parse(e.data);D.stream.seq=p.seq;D.stream.clients=p.clients}catch{}D.stream.lastMsg=Date.now();D.stream.open=true;ecgKick(.45)});
  es.onerror=()=>{D.stream.open=false;D.stream.fails++;if(D.stream.fails>=3){try{es.close()}catch{}D.stream.es=null;setTimeout(openStream,45000)}};
 }
+/* Öffentliche Quellen, schon in config.json. Kein Token.
+   Die Contents-API erlaubt anonym 60 Abrufe/Stunde; ein 15-s-Poll verbraucht das
+   in einer Viertelstunde und die Seite fällt sonst auf die alte state.json zurück. */
+const PUBLIC_API='https://api.github.com/repos/fynnabi15-lang/live-dashboard/contents/state.json?ref=data';
+const PUBLIC_RAW='https://raw.githubusercontent.com/fynnabi15-lang/live-dashboard/data/state.json';
+const API_GAP=70000,RAW_GAP=25000,STATE_TIMEOUT=25000;
+let pollTimer=0,apiPauseUntil=0;
+function rawFromApi(u){const m=String(u||'').match(/^https:\/\/api\.github\.com\/repos\/([^/]+)\/([^/]+)\/contents\/(.+?)\?(?:.*&)?ref=([^&#]+)/);return m?`https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[4]}/${m[3]}`:null}
+function b64utf8(b64){const bin=atob(String(b64).replace(/\s/g,''));const bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);return new TextDecoder().decode(bytes)}
+function parseStatePayload(text){let s;try{s=JSON.parse(text)}catch{return null}if(s&&!Array.isArray(s.bots)&&s.encoding==='base64'&&typeof s.content==='string'){try{s=JSON.parse(b64utf8(s.content))}catch{return null}}if(!s||!Array.isArray(s.bots)||typeof s.generatedAt!=='string')return null;return s}
+function rememberPause(until){apiPauseUntil=Math.max(apiPauseUntil,until||0);try{localStorage.setItem('grok.apiPauseUntil',String(apiPauseUntil))}catch{}}
+function apiPaused(){try{const u=+localStorage.getItem('grok.apiPauseUntil')||0;if(u>apiPauseUntil)apiPauseUntil=u}catch{}return Date.now()<apiPauseUntil}
+function claimApiSlot(){const now=Date.now();try{const last=+localStorage.getItem('grok.apiFetchAt')||0;if(now-last<65000)return false;localStorage.setItem('grok.apiFetchAt',String(now))}catch{return true}return true}
+function noteLimit(r){const rem=r.headers.get('x-ratelimit-remaining');const reset=+r.headers.get('x-ratelimit-reset')||0;const until=reset?reset*1000:Date.now()+15*60*1000;if(r.status===403||r.status===429||(rem!=null&&rem!==''&&+rem<=1))rememberPause(until)}
+async function fetchStateUrl(url,headers){const c=new AbortController(),t=setTimeout(()=>c.abort(),STATE_TIMEOUT);try{return await fetch(url,{cache:'default',headers:headers||{},signal:c.signal})}finally{clearTimeout(t)}}
+async function pullRemote(){
+ const api=(CFG.live&&/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/contents\//.test(CFG.live))?CFG.live:PUBLIC_API;
+ const raw=(CFG.raw&&/^https:\/\/raw\.githubusercontent\.com\//.test(CFG.raw))?CFG.raw:(rawFromApi(api)||PUBLIC_RAW);
+ const errs=[];
+ if(!apiPaused()&&claimApiSlot()){
+  try{const r=await fetchStateUrl(api,{Accept:'application/vnd.github.raw+json'});noteLimit(r);if(r.ok){const s=parseStatePayload(await r.text());if(s)return {s,src:'api'};errs.push('API ohne Bot-Stand')}else errs.push('API HTTP '+r.status)}
+  catch(e){errs.push('API '+((e&&e.name)==='AbortError'?'Timeout':(e.message||e)))}
+ }else errs.push(apiPaused()?'API pausiert':'API gerade abgefragt');
+ try{const r=await fetchStateUrl(raw);if(!r.ok)throw new Error('HTTP '+r.status);const s=parseStatePayload(await r.text());if(s)return {s,src:'raw'};errs.push('raw ohne Bot-Stand')}
+ catch(e){errs.push('raw '+((e&&e.name)==='AbortError'?'Timeout':(e.message||e)))}
+ D.src.liveErr=errs.join(' · ');return null;
+}
+async function loadBundled(){try{const s=await jget((CFG.state||'state.json')+'?t='+Date.now(),{cache:'no-store',timeout:STATE_TIMEOUT});if(applyState(s,'file'))D.stateSrc='file'}catch(e){D.src.snapErr=String(e.message||e)}}
 async function pollSnapshot(){
- const live=D.stream.open&&Date.now()-D.stream.lastMsg<25000;
- if(!live){let ok=false;if(CFG.live){try{const s=await jget(CFG.live,{cache:'no-cache',headers:{Accept:'application/vnd.github.raw+json'}});applyState(s,'snapshot');D.ghLive=Date.parse(s.generatedAt)||0;ok=true;ecgKick(.8)}catch(e){D.src.liveErr=String(e.message||e)}}
- if(!ok){try{const s=await jget((CFG.state||'state.json')+'?t='+Date.now(),{cache:'no-store'});applyState(s,'snapshot');ecgKick(.8)}catch(e){D.src.snapErr=String(e.message||e)}}}
- setTimeout(pollSnapshot,CFG.live?15000:30000);
+ clearTimeout(pollTimer);
+ const streamLive=D.stream.open&&Date.now()-D.stream.lastMsg<25000;
+ let delay=API_GAP;
+ if(!streamLive){
+  const got=await pullRemote();
+  if(got){const prev=D.stateSrc;D.stateSrc=got.src;if(applyState(got.s,'snapshot')){D.ghLive=Date.parse(got.s.generatedAt)||Date.now();D.src.liveErr=null;ecgKick(.8)}else D.stateSrc=prev;delay=got.src==='api'?API_GAP:RAW_GAP}
+  else{if(!D.snap)await loadBundled();delay=RAW_GAP}
+ }
+ pollTimer=setTimeout(pollSnapshot,delay);
 }
 function bilanzSig(s){
  const pick=id=>{const b=(s.bots||[]).find(x=>x&&x.id===id);return b?b.metrics:null};
  try{return JSON.stringify([s.mode,s.perf??null,s.pnlByToken??null,s.positions??null,s.paper??null,pick('A5'),pick('B3')])}catch{return ''}
 }
+function snapMs(s){const t=Date.parse(s&&s.generatedAt);return Number.isFinite(t)?t:NaN}
 function applyState(s,from){
- if(!s||!s.bots)return;
- if(D.snap&&from==='snapshot'&&D.stream.lastState&&s.generatedAt<=D.snap.generatedAt)return;
- if(D.snap&&s.generatedAt===D.snap.generatedAt&&from==='snapshot'&&bilanzSig(s)===bilanzSig(D.snap)){D.stateAt=Date.now();D.ghLive=Date.parse(s.generatedAt)||D.ghLive;renderChips();return}
+ if(!s||!Array.isArray(s.bots))return false;
+ const inc=snapMs(s),cur=D.snap?snapMs(D.snap):NaN;
+ if(D.snap&&Number.isFinite(inc)&&Number.isFinite(cur)&&inc<cur)return false;
+ if(D.snap&&s.generatedAt===D.snap.generatedAt&&from!=='stream'&&bilanzSig(s)===bilanzSig(D.snap)){D.stateAt=Date.now();renderChips();return true}
  const first=!D.snap;D.snap=s;D.stateAt=Date.now();D.stateFrom=from;
- s.coins.forEach(c=>c.mint&&!c.mint.startsWith('0x'));
+ (s.coins||[]).forEach(c=>c.mint&&!c.mint.startsWith('0x'));
  let fresh=0;const keys=new Set();
- for(const e of s.events){const k=e.t+'|'+e.agent+'|'+e.sym+'|'+e.text;keys.add(k);if(!D.evKeys.has(k)){e._new=!first;if(!first)fresh++}}
+ for(const e of s.events||[]){const k=e.t+'|'+e.agent+'|'+e.sym+'|'+e.text;keys.add(k);if(!D.evKeys.has(k)){e._new=!first;if(!first)fresh++}}
  D.evKeys=keys;
  renderAll(first);
  if(fresh&&D.sound)beep(fresh>2?880:660);
  pollDex(true);subSol();
+ return true;
 }
 
 /* ---------- Kurse: Binance WS → Hyperliquid WS → REST ---------- */
@@ -357,9 +393,11 @@ function drawEcg(dt,now){
 const a1Latest=()=>V4()?.a1?.list?.[0]||null;
 function renderChips(){
  const n=Date.now(),st=D.stream,s=D.snap;const live=st.url&&st.open&&n-st.lastMsg<25000;
- const cb=$('#chipBot'),gen=s?.generatedAt;
- cb.dataset.s=(live||(D.ghLive&&Date.now()-D.ghLive<180000))?'live':'warn';
- setT($('span',cb),(!live&&D.ghLive&&Date.now()-D.ghLive<180000)?`Bot-Daten LIVE · Update ${ago(D.ghLive)}`:live?`Bot-Stream LIVE · Änderung ${ago(st.lastState||gen)}`:`Bot-Stand ${gen?tmM(gen)+' Uhr (vor '+ago(gen).replace('vor ','')+')':'…'} · ${st.url?'Stream offline':'Snapshot'}`);
+ const cb=$('#chipBot'),gen=s?.generatedAt,remote=D.stateSrc==='api'||D.stateSrc==='raw';
+ const age=gen?Date.now()-Date.parse(gen):Infinity;
+ cb.dataset.s=live||(remote&&age<10*60*1000)?'live':'warn';
+ cb.dataset.tip=live?'Bot-Stream ist verbunden.':remote?(D.stateSrc==='api'?'Öffentliche GitHub-API, höchstens einmal pro Minute.':'raw.githubusercontent.com, Branch data. Kein API-Limit.'):'Mitgelieferte state.json. Der Live-Abruf ist gerade nicht erreichbar.';
+ setT($('span',cb),live?`Bot-Stream LIVE · Änderung ${ago(st.lastState||gen)}`:remote&&gen?`Bot-Daten LIVE · ${tmM(gen)} Uhr (${ago(gen)})`:`Bot-Stand ${gen?tmM(gen)+' Uhr':'…'} · Snapshot`);
  const cp=$('#chipPx'),b=D.src.bin,wsOk=b.mode==='WebSocket'&&n-b.t<6000,hlOk=D.src.hl.ok&&n-D.src.hl.t<6000&&!wsOk;
  cp.dataset.s=wsOk||hlOk?'live':b.mode==='REST'?'warn':'off';
  setT($('span',cp),wsOk?`Kurse LIVE · Binance WS · ${nf(D.tps,0)}/s`:hlOk?'Kurse LIVE · Hyperliquid WS':b.mode==='REST'?'Kurse · REST alle 2 s':'Kurse verbinden …');
@@ -398,7 +436,7 @@ function renderWallets(){
 function renderSrcs(){
  const s=D.snap,st=D.stream,n=Date.now();const live=st.open&&n-st.lastMsg<25000;
  const L=[['Bot-Stream',st.url?(live?'live':'warn'):'off',st.url?(live?`verbunden · Ping ${ago(st.lastMsg)}`:'getrennt → Snapshot'):'nicht konfiguriert'],
- ['Bot-Snapshot',D.snap?'live':'warn',D.snap?'Stand '+tmM(D.snap.generatedAt):'–'],
+ ['Bot-Snapshot',D.stateSrc==='file'||!D.snap?'warn':'live',D.snap?`Stand ${tmM(D.snap.generatedAt)} · ${D.stateSrc==='api'?'GitHub-API':D.stateSrc==='raw'?'raw-Branch':D.stateSrc==='file'?'lokale Datei':'Stream'}`:'–'],
  ['Binance',D.src.bin.mode==='WebSocket'&&n-D.src.bin.t<6000?'live':D.src.bin.mode==='REST'?'warn':'off',D.src.bin.mode==='WebSocket'&&n-D.src.bin.t<6000?'WebSocket · '+(D.src.bin.host||''):D.src.bin.mode==='REST'?'REST alle 2 s':D.src.bin.err?'nicht erreichbar':'verbinde …'],
  ['Hyperliquid',D.src.hl.ok&&n-D.src.hl.t<8000?'live':'off',D.src.hl.ok&&n-D.src.hl.t<8000?'WebSocket (Reserve)':'getrennt'],
  ['DexScreener',D.src.dex.ok?'live':D.src.dex.ok===false?'warn':'off',D.src.dex.ok?'alle 5 s · '+ago(D.src.dex.t):D.src.dex.err||'–'],
@@ -919,3 +957,5 @@ initPage();initBotData();
 window.__bilanz=bilanzMetrics;
 window.__applyState=applyState;
 window.__snap=()=>D.snap;
+window.__reloadState=()=>pollSnapshot();
+window.__parseState=parseStatePayload;

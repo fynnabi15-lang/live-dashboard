@@ -1,1 +1,6 @@
-{"stream":null,"state":"state.json","live":"https://api.github.com/repos/fynnabi15-lang/live-dashboard/contents/state.json?ref=data"}
+{
+  "stream": null,
+  "state": "state.json",
+  "live": "https://api.github.com/repos/fynnabi15-lang/live-dashboard/contents/state.json?ref=data",
+  "raw": "https://raw.githubusercontent.com/fynnabi15-lang/live-dashboard/data/state.json"
+}
