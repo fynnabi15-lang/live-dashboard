@@ -51,8 +51,9 @@ function openStream(){
 }
 async function pollSnapshot(){
  const live=D.stream.open&&Date.now()-D.stream.lastMsg<25000;
- if(!live){try{const s=await jget((CFG.state||'state.json')+'?t='+Date.now(),{cache:'no-store'});applyState(s,'snapshot');ecgKick(.8)}catch(e){D.src.snapErr=String(e.message||e)}}
- setTimeout(pollSnapshot,30000);
+ if(!live){let ok=false;if(CFG.live){try{const s=await jget(CFG.live,{cache:'no-cache',headers:{Accept:'application/vnd.github.raw+json'}});applyState(s,'snapshot');D.ghLive=Date.parse(s.generatedAt)||0;ok=true;ecgKick(.8)}catch(e){D.src.liveErr=String(e.message||e)}}
+ if(!ok){try{const s=await jget((CFG.state||'state.json')+'?t='+Date.now(),{cache:'no-store'});applyState(s,'snapshot');ecgKick(.8)}catch(e){D.src.snapErr=String(e.message||e)}}}
+ setTimeout(pollSnapshot,CFG.live?15000:30000);
 }
 function applyState(s,from){
  if(!s||!s.bots)return;
@@ -339,8 +340,8 @@ const a1Latest=()=>V4()?.a1?.list?.[0]||null;
 function renderChips(){
  const n=Date.now(),st=D.stream,s=D.snap;const live=st.url&&st.open&&n-st.lastMsg<25000;
  const cb=$('#chipBot'),gen=s?.generatedAt;
- cb.dataset.s=live?'live':'warn';
- setT($('span',cb),live?`Bot-Stream LIVE · Änderung ${ago(st.lastState||gen)}`:`Bot-Stand ${gen?tmM(gen)+' Uhr (vor '+ago(gen).replace('vor ','')+')':'…'} · ${st.url?'Stream offline':'Snapshot'}`);
+ cb.dataset.s=(live||(D.ghLive&&Date.now()-D.ghLive<180000))?'live':'warn';
+ setT($('span',cb),(!live&&D.ghLive&&Date.now()-D.ghLive<180000)?`Bot-Daten LIVE · Update ${ago(D.ghLive)}`:live?`Bot-Stream LIVE · Änderung ${ago(st.lastState||gen)}`:`Bot-Stand ${gen?tmM(gen)+' Uhr (vor '+ago(gen).replace('vor ','')+')':'…'} · ${st.url?'Stream offline':'Snapshot'}`);
  const cp=$('#chipPx'),b=D.src.bin,wsOk=b.mode==='WebSocket'&&n-b.t<6000,hlOk=D.src.hl.ok&&n-D.src.hl.t<6000&&!wsOk;
  cp.dataset.s=wsOk||hlOk?'live':b.mode==='REST'?'warn':'off';
  setT($('span',cp),wsOk?`Kurse LIVE · Binance WS · ${nf(D.tps,0)}/s`:hlOk?'Kurse LIVE · Hyperliquid WS':b.mode==='REST'?'Kurse · REST alle 2 s':'Kurse verbinden …');
