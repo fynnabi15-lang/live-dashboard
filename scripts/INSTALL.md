@@ -9,18 +9,16 @@ Raw telemetry files have no `actionKind`. A missing kind is not analysis or a tr
 ## Command
 
 ```bash
-export SHARED_DIR=/home/box/shared
-export OUT_DIR=/tmp/botpush-dryrun
-node export-state-safe.js
+SHARED_DIR=/home/box/shared OUT_DIR=scratch node export-state-safe.js
 ```
 
-Required: `SHARED_DIR`. Optional: `OUT_DIR` (default `./site` next to the script). No token. No network.
+Required: `SHARED_DIR`. `OUT_DIR` is created relative to the current directory when it is not absolute (default `./site` next to the script). No token. No network.
 
 ## Sources read
 
 Operational files under `SHARED_DIR`, only if present:
 
-- `telemetry/*.json` (short name or that peer's UUID)
+- `dashboard-telemetry/*.json` (short name or that peer's UUID). `telemetry/` is not read.
 - `trading/signals-analyse.jsonl`
 - `trading/rug-checks.jsonl`
 - `trading/liquidity-checks.jsonl`
@@ -53,15 +51,11 @@ python3 -m unittest test_push.py
 
 Then open `/tmp/botpush-dryrun/state.json` and confirm it has no `realized_result`, `cost_eur`, `fifo`, or `/home/`. `execution.*.verified` stays false and `closed` stays null until a book has `confirmation: true`, `closure: "validated"`, `fees: "complete"`, and for REAL a signature plus `blockTime`. `schemaVersion` and `verified` alone do not publish amounts.
 
-The archive did not contain peer UUID strings. `peer-map.json` therefore maps only the confirmed short names. Unknown UUID filenames are ignored. Add a UUID only after the owner confirms it belongs to that peer:
-
-```json
-"uuids": { "00000000-0000-4000-8000-000000000000": "A1" }
-```
+`peer-map.json` in this package already contains the full 18-peer UUID map. A file is accepted only when its filename and its `botId` name the same peer. `botId` may be the short name or that peer's UUID.
 
 ## What it reads
 
-`SHARED_DIR` is the box shared directory. The script reads operational logs and `telemetry/<BotId>.json`. It reads `tax/sync-status.json` only for `last_updated`, `completeness`, and `open_issues`.
+`SHARED_DIR` is the box shared directory. The script reads operational logs and `dashboard-telemetry/<uuid-or-alias>.json`. It does not read `telemetry/`. It reads `tax/sync-status.json` only for `last_updated`, `completeness`, and `open_issues`.
 
 It does not read `tax/tax-ledger.csv`, `tax/tax-ledger.jsonl`, `tax/fifo-lots.json`, or correction files. It does not follow paths inside telemetry. Empty trade logs stay `closed: null` with `coverage: "unknown"`. They are not zero.
 

@@ -79,6 +79,7 @@ function build(shared, opt = {}) {
     id, botId: id, name, title, group, role,
     lastT: null, lastActionAt: null, observedAt: null, sourceUpdatedAt: null,
     actionKind: null, origin: null, status: 'UNKNOWN', verified: false, running: false,
+    reportedLastActionAt: null,
     task: null, coin: null, reasoning: null, metrics: [], recent: [], files: []
   }]));
   const events = [];
@@ -197,6 +198,7 @@ function build(shared, opt = {}) {
     if (!b || !raw) continue;
     b.observedAt = raw.observedAt || b.observedAt;
     if (raw.sourceUpdatedAt) b.sourceUpdatedAt = raw.sourceUpdatedAt;
+    if (raw.reportedLastActionAt) b.reportedLastActionAt = raw.reportedLastActionAt;
     if (raw.status && raw.status !== 'UNKNOWN') b.status = raw.status;
     if (!b.origin) b.origin = 'self_report';
     if (raw.actionKind && b.origin !== 'file_event') b.actionKind = raw.actionKind;
@@ -237,6 +239,7 @@ function build(shared, opt = {}) {
     flow: [],
     stages: ['Scout', 'Analyst', 'Filter', 'Guard', 'Sniper'],
     radar,
+    sniffer: { scanned: run && Number.isFinite(+run.scanned_pairs) ? +run.scanned_pairs : null, at: run ? ms(run.abruf && run.abruf.utc) : null, minProgress: null },
     health: health ? { overall: String(health.overall || '').toLowerCase() === 'ok' ? 'ok' : 'degraded', at: iso(health.checked_at_utc), alerts: Array.isArray(health.alerts) ? health.alerts.length : null, sources: [] } : null,
     coins: [],
     wallets: walletAddrs(wst),
@@ -259,7 +262,7 @@ function completeness(v) {
 }
 function walletAddrs(wst) {
   const out = [];
-  const take = (label, addr) => { if (typeof addr === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) out.push({ label: screen(label, 24) || 'Wallet', address: addr }); };
+  const take = (label, addr) => { if (typeof addr === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) out.push({ label: screenText(label) || 'Wallet', address: addr }); };
   if (wst && wst.wallets) { take('Haupt-Wallet', wst.wallets.main && wst.wallets.main.address); take('Trading-Wallet', wst.wallets.trading && wst.wallets.trading.address); }
   return out;
 }
@@ -286,7 +289,7 @@ function resolvePeer(stem, raw) {
 }
 function isUuid(v) { return typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v); }
 function loadTelemetry(shared) {
-  const dir = path.join(shared, 'telemetry');
+  const dir = path.join(shared, 'dashboard-telemetry');
   let names = [];
   try { names = fs.readdirSync(dir); } catch { return {}; }
   const out = {};
@@ -302,6 +305,7 @@ function loadTelemetry(shared) {
       observedAt: isoOrNull(raw.observedAt),
       sourceUpdatedAt: isoOrNull(raw.sourceUpdatedAt),
       status, actionKind,
+      reportedLastActionAt: isoOrNull(raw.lastActionAt),
       summary: screenSummary(raw.summary),
       verdict: VERDICT.has(raw.verdict) ? raw.verdict : null
     };

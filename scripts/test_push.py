@@ -70,7 +70,8 @@ class PushTest(unittest.TestCase):
         d = tempfile.mkdtemp()
         dest = os.path.join(d, 'state.json')
         push.atomic_write(dest, b'{"ok":true}')
-        self.assertEqual(open(dest, 'rb').read(), b'{"ok":true}')
+        with open(dest, 'rb') as fh:
+            self.assertEqual(fh.read(), b'{"ok":true}')
         self.assertEqual(os.listdir(d), ['state.json'])
 
 if __name__ == '__main__':
