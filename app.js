@@ -179,7 +179,8 @@ const fmtVal=(c)=>{const v=c.value;if(v==null)return NODATA;const s=String(v);if
 
 /* ---------- Helfer: DOM ---------- */
 const setT=(el,t)=>{if(el&&el.textContent!==t)el.textContent=t};
-const botSt=b=>{if(!b.lastT)return['none','WARTET'];const m=(Date.now()-b.lastT)/60000;return m<=15?['active','AKTIV']:m<=120?['calm','RUHIG']:['idle','INAKTIV']};
+const PASSIVE_KIND=/^(status_check|config_prep|test)$/;
+const botSt=b=>{if(PASSIVE_KIND.test(b.actionKind||''))return['none',b.actionKind==='test'?'TEST':b.actionKind==='config_prep'?'VORBEREITET':'STATUS'];if(!b.lastT)return['none','WARTET'];const m=(Date.now()-b.lastT)/60000;return m<=15?['active','AKTIV']:m<=120?['calm','RUHIG']:['idle','INAKTIV']};
 const bName=b=>b.name.replace(/^[A-D]\d\s*/,'')||b.name;
 const vcls=v=>!v?'':/^(BUY|STRONG|OK|PASS|ABGEGLICHEN|BEREIT|HIGH)/i.test(v)||/bonding_9/.test(v)?'hi':/(BLOCK|SKIP|ALARM|DEGRADED|WARN|ABWEICH|DATEN|FAIL)/i.test(v)?'lo':'';
 const symOf=m=>D.dex[m]?.sym||D.snap?.coins.find(c=>c.mint===m)?.symbol||D.snap?.radar.find(c=>c.mint===m)?.symbol||short(m);
@@ -223,7 +224,7 @@ function updBot(el,b){
  const rs=(r?.reasons?.length?r.reasons.map(reasonDe):r?.risks?.length?[r.risks[0]]:[]).slice(0,2);
  const rh=rs.map(x=>`<li title="${esc(x)}">${esc(x)}</li>`).join('')||`<li style="border-style:dashed;color:#777">${r?'keine Gründe im Log':'keine Begründung vorhanden'}</li>`;if(el._rh!==rh){$('.rs',el).innerHTML=rh;el._rh=rh}
  const mh=(b.metrics||[]).slice(0,3).map(([l,x])=>`<div><small>${esc(l)}</small><b>${esc(publicMetric(l,x))}</b></div>`).join('');if(el._mh!==mh){$('.mt',el).innerHTML=mh;el._mh=mh}$('.mt',el).hidden=!mh;
- setT($('.ago',el),b.lastT?'zuletzt '+ago(b.lastT):'keine Zeitangabe');
+ setT($('.ago',el),b.lastT&&!PASSIVE_KIND.test(b.actionKind||'')?'Aktion '+ago(b.lastT):b.observedAt?'beobachtet '+ago(Date.parse(b.observedAt)):'keine Aktion');
  updBotLive(el,b);
 }
 function updBotLive(el,b){const m=b.coin?.mint,d=m&&D.dex[m];setT($('.cp',el),d&&!d.none?px(d.price):'');const c=$('.cc',el);if(d&&!d.none&&d.c5!=null){setT(c,pct(d.c5)+' 5m');c.className='cc mono '+cls(d.c5)}else setT(c,'')}
@@ -370,7 +371,7 @@ function renderChips(){
  const a=a1Latest(),ca=$('#chipA1');
  if(!a){ca.dataset.s='off';setT($('span',ca),'A1: keine Daten')}
  else{const fresh=n-a.t<5*60000;ca.dataset.s=fresh?'live':'warn';setT($('span',ca),`${fresh?'A1 analysiert gerade':'A1 zuletzt'}: ${a.symbol||'?'} ${short(a.mint)} · Conf ${a.confidence??'–'} · ${fresh?(a.verdict||''):ago(a.t)}`)}
- const cm=$('#chipMode');cm.dataset.s=s.mode==='PAPER'?'live':'warn';setT($('span',cm),s.mode==='PAPER'?'PAPER · simuliert':'LIVE-Handel');
+ const cm=$('#chipMode');cm.dataset.s=s.mode==='PAPER'||s.mode==='LIVE'?'live':'off';setT($('span',cm),s.mode==='PAPER'?'PAPER · simuliert':s.mode==='LIVE'?'LIVE-Handel':'Modus: unbekannt');
  const h=s.health,ch=$('#chipHealth');ch.dataset.s=!h?'off':h.overall==='ok'?'live':'warn';setT($('span',ch),h?`Health ${h.overall}${h.alerts?` · ${h.alerts} Alarme`:''}`:'Health: keine Daten');
 }
 function renderRail(){

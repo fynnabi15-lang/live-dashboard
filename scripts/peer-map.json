@@ -1,0 +1,28 @@
+{
+  "aliases": {
+    "MAIN": "MAIN",
+    "Main": "MAIN",
+    "main": "MAIN",
+    "A1": "A1",
+    "A2": "A2",
+    "A3": "A3",
+    "A4": "A4",
+    "A5": "A5",
+    "B1": "B1",
+    "B2": "B2",
+    "B3": "B3",
+    "C1": "C1",
+    "C2": "C2",
+    "C3": "C3",
+    "D1": "D1",
+    "D2": "D2",
+    "D3": "D3",
+    "D4": "D4",
+    "D5": "D5",
+    "TRADES": "TRADES",
+    "trades": "TRADES",
+    "Umsätzte": "TRADES",
+    "Umsaetze": "TRADES"
+  },
+  "uuids": {}
+}
