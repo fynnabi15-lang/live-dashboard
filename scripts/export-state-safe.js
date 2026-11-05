@@ -26,7 +26,19 @@ const PEERS = [
 ];
 const ACTION = new Set(['analysis', 'risk', 'trade', 'scan', 'health', 'harvest', 'arbitration', 'journal', 'status_check', 'config_prep', 'test']);
 const KIND_ALIAS = { status_read: 'status_check', config_preparation: 'config_prep', wallet_check_start: 'status_check', scan_start_reported: 'status_check', none: null, unverified_historical_action: null };
-const PASSIVE = new Set(['status_check', 'config_prep', 'test', 'journal']);
+const PASSIVE = new Set(['status_check', 'config_prep', 'test', 'journal', 'unverified_history']);
+const WHALE = new Set(['KAUF', 'VERKAUF', 'WHALE_CREATOR_MOVED']);
+const STATUS_LINE = {
+  SCANNING: 'Status gemeldet: SCANNING. Kein Nachweis eines laufenden Ziels.',
+  WAITING: 'Status gemeldet: wartend.',
+  WAITING_RATE_LIMIT: 'Status gemeldet: warte auf Limit.',
+  IDLE: 'Status gemeldet: idle. Keine laufende Aktion.',
+  MONITORING_IDLE: 'Status gemeldet: Beobachtung ohne Funding.',
+  DEGRADED: 'Status gemeldet: degraded.',
+  OK: 'Status gemeldet: ok.',
+  ERROR: 'Status gemeldet: Fehler, ohne Detailtext.',
+  ACTIVE: 'Status gemeldet: active. Nicht als laufende Aktion bestätigt.'
+};
 const FILE_ACTION = new Set(['analysis', 'risk', 'trade', 'scan', 'health', 'harvest', 'arbitration']);
 const VERDICT = new Set(['BUY', 'STRONG_BUY', 'MONITOR', 'SKIP', 'BLOCK', 'PASS', 'OK', 'ERROR']);
 const STATUS = {
@@ -51,7 +63,7 @@ function build(shared, opt = {}) {
   };
   const codes = a => (Array.isArray(a) ? a : []).filter(x => /^[A-Z0-9_]{1,40}$/.test(x)).slice(0, 3);
   const mintOk = m => typeof m === 'string' && m.length >= 32 && m.length <= 44 && !m.startsWith('0x');
-  const coinOf = (mint, sym) => mintOk(mint) ? { mint, sym: screen(sym, 16) } : null;
+  const coinOf = (mint, sym) => mintOk(mint) ? { mint, sym: ticker(sym) } : null;
   const verdictOf = v => VERDICT.has(v) ? v : null;
 
   const signals = rows('trading/signals-analyse.jsonl').filter(s => !s.test);
@@ -86,7 +98,7 @@ function build(shared, opt = {}) {
   const pushEv = (t, bot, kind, sym, text, mint) => {
     const line = screen(text, 120);
     if (!t || !line) return;
-    events.push({ t, agent: bots[bot].name, kind, sym: screen(sym, 16) || '', text: line, level: 'info', mint: mintOk(mint) ? mint : null, actionKind: kind });
+    events.push({ t, agent: bots[bot].name, kind, sym: ticker(sym) || '', text: line, level: 'info', mint: mintOk(mint) ? mint : null, actionKind: kind });
   };
   const act = (id, t, kind, task, coin, file) => {
     const b = bots[id];
@@ -94,7 +106,8 @@ function build(shared, opt = {}) {
     b.lastActionAt = new Date(t).toISOString();
     b.actionKind = kind;
     b.origin = 'file_event';
-    b.task = screen(task, 140);
+    b.task = task;
+    b.taskFixed = true;
     b.coin = coin;
     b.files = file ? [file] : b.files;
     if (!PASSIVE.has(kind)) b.lastT = t;
@@ -103,24 +116,24 @@ function build(shared, opt = {}) {
   const sA = signals.slice().sort((a, b) => (ms(b.ts) || 0) - (ms(a.ts) || 0))[0];
     if (sA && ms(sA.ts)) {
     const v = verdictOf(sA.verdict) || verdictOf(sA.status);
-    act('A1', ms(sA.ts), 'analysis', `Letztes Signal ${screen(sA.symbol, 16) || 'Coin'}: ${v || 'ohne Urteil'}`, null, 'trading/signals-analyse.jsonl');
+    act('A1', ms(sA.ts), 'analysis', `Letztes Signal ${ticker(sA.symbol) || 'Coin'}: ${v || 'ohne Urteil'}`, null, 'trading/signals-analyse.jsonl');
     bots.A1.reasoning = { verdict: v, badge: null, confidence: typeof sA.confidence === 'number' ? sA.confidence : null, reasons: codes(sA.reason_codes), risks: [], text: null };
     bots.A1.sourceUpdatedAt = mtime('trading/signals-analyse.jsonl');
-    signals.slice(-8).reverse().forEach(s => pushEv(ms(s.ts), 'A1', 'analysis', s.symbol, `${verdictOf(s.verdict) || 'Signal'} ${codes(s.reason_codes).join(' ')}`.trim(), s.mint));
+    signals.slice(-8).reverse().forEach(s => pushEv(ms(s.ts), 'A1', 'analysis', ticker(s.symbol), `${verdictOf(s.verdict) || 'Signal'} ${codes(s.reason_codes).join(' ')}`.trim(), s.mint));
   }
   const lastRug = rug.slice().sort((a, b) => (ms(b.ts) || 0) - (ms(a.ts) || 0))[0];
   if (lastRug && ms(lastRug.ts)) {
-    act('A2', ms(lastRug.ts), 'risk', `Rug-Check ${screen(lastRug.symbol, 16) || 'Coin'}: ${verdictOf(lastRug.status) || 'ohne Status'}`, coinOf(lastRug.mint, lastRug.symbol), 'trading/rug-checks.jsonl');
+    act('A2', ms(lastRug.ts), 'risk', `Rug-Check ${ticker(lastRug.symbol) || 'Coin'}: ${verdictOf(lastRug.status) || 'ohne Status'}`, coinOf(lastRug.mint, lastRug.symbol), 'trading/rug-checks.jsonl');
     bots.A2.sourceUpdatedAt = mtime('trading/rug-checks.jsonl');
   } else bots.A2.files = ['trading/rug-checks.jsonl'];
   const lastLiq = liq.slice().sort((a, b) => (ms(b.ts) || 0) - (ms(a.ts) || 0))[0];
   if (lastLiq && ms(lastLiq.ts)) {
-    act('A3', ms(lastLiq.ts), 'risk', `Liquiditäts-Check ${screen(lastLiq.symbol, 16) || 'Coin'}: ${verdictOf(lastLiq.status) || 'ohne Status'}`, coinOf(lastLiq.mint, lastLiq.symbol), 'trading/liquidity-checks.jsonl');
+    act('A3', ms(lastLiq.ts), 'risk', `Liquiditäts-Check ${ticker(lastLiq.symbol) || 'Coin'}: ${verdictOf(lastLiq.status) || 'ohne Status'}`, coinOf(lastLiq.mint, lastLiq.symbol), 'trading/liquidity-checks.jsonl');
     bots.A3.sourceUpdatedAt = mtime('trading/liquidity-checks.jsonl');
   } else bots.A3.files = ['trading/liquidity-checks.jsonl'];
   const lastRisk = risk.slice().sort((a, b) => (ms(b.ts) || 0) - (ms(a.ts) || 0))[0];
   if (lastRisk && ms(lastRisk.ts)) {
-    act('A4', ms(lastRisk.ts), 'risk', `Risk-Entscheid ${screen(lastRisk.symbol, 16) || ''}`.trim(), coinOf(lastRisk.mint, lastRisk.symbol), 'trading/risk-decisions.jsonl');
+    act('A4', ms(lastRisk.ts), 'risk', `Risk-Entscheid ${ticker(lastRisk.symbol) || 'Coin'}`, coinOf(lastRisk.mint, lastRisk.symbol), 'trading/risk-decisions.jsonl');
     bots.A4.reasoning = { verdict: verdictOf(lastRisk.status) || verdictOf(lastRisk.decision), badge: null, confidence: null, reasons: codes(lastRisk.reason_codes), risks: [], text: null };
   } else bots.A4.files = ['trading/risk-decisions.jsonl'];
 
@@ -137,11 +150,24 @@ function build(shared, opt = {}) {
     bots.A5.files = ['trading/real/closed-trades.jsonl', 'trading/paper/paper-trades.jsonl', 'trading/execution-events.jsonl'];
   }
 
-  whales.slice(-8).reverse().forEach(w => pushEv(ms(w.logged_at_utc), 'C1', 'scan', (w.coin || '').split('@')[0], `${screen(w.aktion, 24) || screen(w.typ, 24) || 'Ereignis'}`, w.mint));
+  whales.slice(-8).reverse().forEach(w => pushEv(ms(w.logged_at_utc), 'C1', 'scan', ticker((w.coin || '').split('@')[0]), whaleCode(w.aktion) || whaleCode(w.typ) || 'Ereignis', w.mint));
   const lastW = whales.slice().sort((a, b) => (ms(b.logged_at_utc) || 0) - (ms(a.logged_at_utc) || 0))[0];
-  if (lastW && ms(lastW.logged_at_utc)) act('C1', ms(lastW.logged_at_utc), 'scan', `Whale-Ereignis ${screen((lastW.coin || '').split('@')[0], 16) || ''}`.trim(), coinOf(lastW.mint, (lastW.coin || '').split('@')[0]), 'trading/whale-events.jsonl');
+  if (lastW && ms(lastW.logged_at_utc)) act('C1', ms(lastW.logged_at_utc), 'scan', `Whale-Ereignis ${ticker((lastW.coin || '').split('@')[0]) || 'Coin'}`, coinOf(lastW.mint, (lastW.coin || '').split('@')[0]), 'trading/whale-events.jsonl');
   const lastS = sent.slice().sort((a, b) => (ms(b.ts_utc) || 0) - (ms(a.ts_utc) || 0))[0];
-  if (lastS && ms(lastS.ts_utc)) act('C2', ms(lastS.ts_utc), 'scan', `Sentiment ${screen((lastS.token || '').replace('$', ''), 16) || 'Coin'}: ${verdictOf(lastS.verdict) || 'ohne Urteil'}`, coinOf(lastS.mint, lastS.token), 'trading/sentiment-checks.jsonl');
+  if (lastS && ms(lastS.ts_utc)) {
+    const b = bots.C2;
+    b.lastActionAt = new Date(ms(lastS.ts_utc)).toISOString();
+    b.actionKind = 'unverified_history';
+    b.origin = 'unverified_file';
+    b.task = 'Historische Sentiment-Datei. Zeitstempel nicht als aktueller Scan bestätigt.';
+    b.taskFixed = true;
+    b.lastT = null;
+    b.running = false;
+    b.verified = false;
+    b.coin = null;
+    b.files = ['trading/sentiment-checks.jsonl'];
+    pushEv(ms(lastS.ts_utc), 'C2', 'unverified_history', ticker(String(lastS.token || '').replace(/^\$/, '')), verdictOf(lastS.verdict) || 'Signal', lastS.mint);
+  }
 
   let run = null;
   try {
@@ -166,7 +192,7 @@ function build(shared, opt = {}) {
     bots.D2.metrics = [['Alarme', Array.isArray(health.alerts) ? health.alerts.length : null]];
   }
   const d3t = ms(hb && (hb.updated_utc || hb.last_cycle_end_utc)) || ms(runs.length ? runs[runs.length - 1].run_utc : null);
-  if (d3t) act('D3', d3t, 'harvest', hb && hb.cycle_no != null ? `Zyklus ${hb.cycle_no}` : 'Harvest-Lauf', null, 'trading/backtests/runner-heartbeat.json');
+  if (d3t) act('D3', d3t, 'harvest', hb && Number.isFinite(+hb.cycle_no) ? `Zyklus ${+hb.cycle_no}` : 'Harvest-Lauf', null, 'trading/backtests/runner-heartbeat.json');
   const lastArb = arb.slice().sort((a, b) => (ms(b.ts) || 0) - (ms(a.ts) || 0))[0];
   if (lastArb && ms(lastArb.ts)) {
     act('D4', ms(lastArb.ts), 'arbitration', `Urteil ${verdictOf(lastArb.final_signal) || 'ohne Signal'}`, coinOf(lastArb.mint, lastArb.token), 'trading/arbitration-decisions.jsonl');
@@ -201,8 +227,8 @@ function build(shared, opt = {}) {
     if (raw.reportedLastActionAt) b.reportedLastActionAt = raw.reportedLastActionAt;
     if (raw.status && raw.status !== 'UNKNOWN') b.status = raw.status;
     if (!b.origin) b.origin = 'self_report';
-    if (raw.actionKind && b.origin !== 'file_event') b.actionKind = raw.actionKind;
-    if (raw.summary && !b.task) b.task = (kindPrefix(raw.actionKind) + raw.summary).trim();
+    if (raw.actionKind && b.origin !== 'file_event' && b.origin !== 'unverified_file') b.actionKind = raw.actionKind;
+    if (!b.task && !b.actionKind && STATUS_LINE[b.status]) { b.task = STATUS_LINE[b.status]; b.taskFixed = true; }
     if ((b.status === 'SCANNING' || b.status === 'WAITING_RATE_LIMIT') && id === 'A1') b.coin = null;
     b.verified = false;
     b.running = false;
@@ -212,10 +238,15 @@ function build(shared, opt = {}) {
     b.recent = events.filter(e => e.agent === b.name).slice(0, 8).map(e => ({ t: e.t, kind: e.kind, sym: e.sym, mint: e.mint, text: e.text, level: e.level }));
   }
 
-  const mode = paperState.mode === 'PAPER' || paperState.mode === 'LIVE' ? paperState.mode : null;
+  const backtest = paperState.mode === 'PAPER' || paperState.mode === 'LIVE' ? paperState.mode : null;
+  const prod = json('trading/production-mode.json');
+  const prodMode = prod && prod.ready === true && (prod.mode === 'PAPER' || prod.mode === 'LIVE') ? prod.mode : null;
+  const mode = prodMode && (!backtest || backtest === prodMode) ? prodMode : null;
   const radar = ((run && run.eintraege) || []).slice(0, 14).map(e => ({
-    mint: e.mint, symbol: screen(e.symbol, 16), status: screen(e.status, 24), prog: typeof e.curve?.bonding_curve_progress_pct === 'number' ? e.curve.bonding_curve_progress_pct : null
+    mint: e.mint, symbol: ticker(e.symbol), status: radarStatus(e.status), prog: typeof e.curve?.bonding_curve_progress_pct === 'number' ? e.curve.bonding_curve_progress_pct : null
   })).filter(e => mintOk(e.mint));
+  const c1List = whales.slice(-12).reverse().map(w => ({ t: ms(w.logged_at_utc), symbol: ticker((w.coin || '').split('@')[0]), mint: mintOk(w.mint) ? w.mint : null, aktion: whaleCode(w.aktion) || whaleCode(w.typ) })).filter(e => e.t && e.mint);
+  const c2List = lastS && ms(lastS.ts_utc) ? [{ t: ms(lastS.ts_utc), token: ticker(String(lastS.token || '').replace(/^\$/, '')), mint: mintOk(lastS.mint) ? lastS.mint : null, verdict: verdictOf(lastS.verdict), unverified: true }] : [];
   const filePulse = ['trading/signals-analyse.jsonl', 'trading/rug-checks.jsonl', 'trading/liquidity-checks.jsonl', 'trading/risk-decisions.jsonl', 'trading/execution-events.jsonl', 'trading/health/health-status.json', 'tax/sync-status.json']
     .map(f => ({ f: path.basename(f), t: ms(mtime(f)) })).filter(x => x.t);
 
@@ -223,6 +254,7 @@ function build(shared, opt = {}) {
     schemaVersion: 1,
     generatedAt: new Date(now).toISOString(),
     mode,
+    modeReady: mode != null,
     execution: {
       real: { venue: 'REAL', verified: false, coverage: 'unknown', source: 'trading/real/closed-trades.jsonl', observedAt: mtime('trading/real/closed-trades.jsonl'), lastActionAt: null, closed: null, wins: null, avgHoldMs: null, grossProfitEur: null, grossLossEur: null, netEur: null },
       paper: { venue: 'PAPER', verified: false, coverage: 'unknown', source: 'trading/paper/paper-trades.jsonl', observedAt: mtime('trading/paper/paper-trades.jsonl'), lastActionAt: null, closed: null, wins: null, avgHoldMs: null, netSol: null }
@@ -246,7 +278,7 @@ function build(shared, opt = {}) {
     config: {},
     counts: { signals: signals.length, blocked: signals.filter(s => s.status === 'BLOCK').length, monitor: signals.filter(s => s.verdict === 'MONITOR').length, skipBy: {} },
     filePulse,
-    v4: { builtAt: now, a1: { total: signals.length, list: signals.slice(-12).reverse().map(s => ({ id: screen(s.signal_id, 40), mint: mintOk(s.mint) ? s.mint : null, symbol: screen(s.symbol, 16), t: ms(s.ts), verdict: verdictOf(s.verdict), status: verdictOf(s.status), confidence: typeof s.confidence === 'number' ? s.confidence : null, reasonCodes: codes(s.reason_codes) })) }, scouts: { c1: [], c2: [], c3: { scanNow: radar, launches: [], run: run ? { t: ms(run.abruf.utc), scanned: Number.isFinite(+run.scanned_pairs) ? +run.scanned_pairs : null } : null } }, lanes: { A1: events.filter(e => e.agent === bots.A1.name).map(e => ({ t: e.t, sym: e.sym, mint: e.mint, txt: e.text })), A2: [], A3: [], A5: events.filter(e => e.agent === bots.A5.name).map(e => ({ t: e.t, sym: e.sym, mint: e.mint, txt: e.text })) }, journeys: [] }
+    v4: { builtAt: now, a1: { total: signals.length, list: signals.slice(-12).reverse().map(s => ({ id: signalId(s.signal_id), mint: mintOk(s.mint) ? s.mint : null, symbol: ticker(s.symbol), t: ms(s.ts), verdict: verdictOf(s.verdict), status: verdictOf(s.status), confidence: typeof s.confidence === 'number' ? s.confidence : null, reasonCodes: codes(s.reason_codes) })) }, scouts: { c1: c1List, c2: c2List, c3: { scanNow: radar, launches: [], run: run ? { t: ms(run.abruf.utc), scanned: Number.isFinite(+run.scanned_pairs) ? +run.scanned_pairs : null } : null } }, lanes: { A1: events.filter(e => e.agent === bots.A1.name).map(e => ({ t: e.t, sym: e.sym, mint: e.mint, txt: e.text })), A2: [], A3: [], A5: events.filter(e => e.agent === bots.A5.name).map(e => ({ t: e.t, sym: e.sym, mint: e.mint, txt: e.text })) }, journeys: [] }
   };
 }
 
@@ -306,12 +338,20 @@ function loadTelemetry(shared) {
       sourceUpdatedAt: isoOrNull(raw.sourceUpdatedAt),
       status, actionKind,
       reportedLastActionAt: isoOrNull(raw.lastActionAt),
-      summary: screenSummary(raw.summary),
       verdict: VERDICT.has(raw.verdict) ? raw.verdict : null
     };
   }
   return out;
 }
+function ticker(s) {
+  const t = String(s ?? '').replace(/^\$/, '').trim();
+  if (!/^[A-Za-z][A-Za-z0-9]{0,15}$/.test(t)) return null;
+  if (/^(https?|www|file)$/i.test(t)) return null;
+  return t;
+}
+function whaleCode(v) { return WHALE.has(v) ? v : null; }
+function radarStatus(v) { return typeof v === 'string' && /^[a-z0-9_]{1,24}$/.test(v) ? v : null; }
+function signalId(v) { return typeof v === 'string' && /^ana-[0-9]{8}-[0-9]{6}-[A-Za-z0-9]{1,16}$/.test(v) ? v : null; }
 function mapStatus(v) {
   const s = String(v || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
   return STATUS[s] || 'UNKNOWN';

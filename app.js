@@ -179,8 +179,10 @@ const fmtVal=(c)=>{const v=c.value;if(v==null)return NODATA;const s=String(v);if
 
 /* ---------- Helfer: DOM ---------- */
 const setT=(el,t)=>{if(el&&el.textContent!==t)el.textContent=t};
-const PASSIVE_KIND=/^(status_check|config_prep|test|journal)$/;
-const botSt=b=>{if(b.running===true&&!PASSIVE_KIND.test(b.actionKind||''))return['active','AKTIV'];if(PASSIVE_KIND.test(b.actionKind||''))return['none',b.actionKind==='test'?'TEST':b.actionKind==='config_prep'?'VORBEREITET':b.actionKind==='journal'?'JOURNAL':'STATUS'];if(b.status==='UNKNOWN'&&!b.lastT)return['none','UNBEKANNT'];if(!b.lastT)return['none','KEINE AKTION'];return['idle','LETZT'];};
+const PASSIVE_KIND=/^(status_check|config_prep|test|journal|unverified_history)$/;
+const botSt=b=>{if(b.running===true&&!PASSIVE_KIND.test(b.actionKind||''))return['active','AKTIV'];if(b.actionKind==='unverified_history')return['none','HISTORISCH'];if(PASSIVE_KIND.test(b.actionKind||''))return['none',b.actionKind==='test'?'TEST':b.actionKind==='config_prep'?'VORBEREITET':b.actionKind==='journal'?'JOURNAL':'STATUS'];if(b.status==='UNKNOWN'&&!b.lastT)return['none','UNBEKANNT'];if(!b.lastT)return['none','KEINE AKTION'];return['idle','LETZT'];};
+function botAge(b){const p=[];if(b.observedAt)p.push('beobachtet '+ago(Date.parse(b.observedAt)));if(b.actionKind==='unverified_history'&&b.lastActionAt)p.push('historisch '+ago(Date.parse(b.lastActionAt)));else if(b.lastT)p.push('Aktion '+ago(b.lastT));if(b.sourceUpdatedAt)p.push('Quelle '+ago(Date.parse(b.sourceUpdatedAt)));if(b.reportedLastActionAt&&b.reportedLastActionAt!==b.lastActionAt)p.push('gemeldet '+ago(Date.parse(b.reportedLastActionAt)));if(!p.length)p.push(b.status==='UNKNOWN'?'nicht verfügbar':'keine Zeit');return p.join(' · ')}
+function shownTask(b){if(b.taskFixed===true&&b.task)return b.task;return b.status==='UNKNOWN'?'Nicht verfügbar':'Keine bestätigte Aktion'}
 const bName=b=>b.name.replace(/^[A-D]\d\s*/,'')||b.name;
 const vcls=v=>!v?'':/^(BUY|STRONG|OK|PASS|ABGEGLICHEN|BEREIT|HIGH)/i.test(v)||/bonding_9/.test(v)?'hi':/(BLOCK|SKIP|ALARM|DEGRADED|WARN|ABWEICH|DATEN|FAIL)/i.test(v)?'lo':'';
 const symOf=m=>D.dex[m]?.sym||D.snap?.coins.find(c=>c.mint===m)?.symbol||D.snap?.radar.find(c=>c.mint===m)?.symbol||short(m);
@@ -193,7 +195,7 @@ const KP=[];
 function renderKpis(){
  const s=D.snap,host=$('#kpis');
  if(!KP.length){const names=['Bots aktiv','Signale','Radar-Kandidaten','Offene Positionen','Paper-Equity (SOL)','Wallet-SOL live'];names.forEach((n,i)=>{const d=document.createElement('div');d.className='kpi';d.style.animationDelay=i*70+'ms';d.innerHTML=`<small>${n}</small><b class="mono">–</b><span></span>`;host.appendChild(d);KP.push({el:d,b:d.children[1],sub:d.children[2],v:null,from:0,to:null,dec:0,t0:0})});
-  host.children[0].dataset.tip='Bots mit Aktivität in den letzten 15 Minuten (live berechnet).';host.children[1].dataset.tip='Alle Analyse-Signale im Log, davon blockiert.';host.children[2].dataset.tip='Coins, die der Launch Sniffer im letzten Lauf nahe der Graduation (≥80 % Bonding Curve) gefunden hat.';host.children[3].dataset.tip='Nur mit geprüftem positionBook. Steuer-Lots und leere Dateien sind keine Null.';host.children[4].dataset.tip='Nur mit geprüftem Paper-Buch. Kein Steuer-Ledger.';host.children[5].dataset.tip='SOL in Haupt- + Trading-Wallet, live über Solana-WebSocket.'}
+  host.children[0].dataset.tip='Nur Bots mit belegter laufender Aktion. Ein frischer Export ist kein Aktiv-Nachweis.';host.children[1].dataset.tip='Alle Analyse-Signale im Log, davon blockiert.';host.children[2].dataset.tip='Coins, die der Launch Sniffer im letzten Lauf nahe der Graduation (≥80 % Bonding Curve) gefunden hat.';host.children[3].dataset.tip='Nur mit geprüftem positionBook. Steuer-Lots und leere Dateien sind keine Null.';host.children[4].dataset.tip='Nur mit geprüftem Paper-Buch. Kein Steuer-Ledger.';host.children[5].dataset.tip='SOL in Haupt- + Trading-Wallet, live über Solana-WebSocket.'}
  const act=s.bots.filter(b=>botSt(b)[0]==='active').length;
  const w=s.wallets.map(x=>D.wal[x.address]?.sol);const wsum=w.some(v=>v!=null)?w.reduce((a,v)=>a+(v||0),0):null;
  const books=tradeReport(s),openN=books.positions?books.positions.count:null,paperN=books.paper?books.paper.closed:null;
@@ -215,7 +217,7 @@ function renderBots(first){
 function updBot(el,b){
  const [st,stt]=botSt(b);el.dataset.st=st;const r=b.reasoning;
  setT($('.bn',el),bName(b));setT($('.stt',el),stt);
- const task=b.task||'Noch keine Aktivität im Log';const tk=$('.task',el);
+ const task=shownTask(b);const tk=$('.task',el);
  const sig=(b.lastT||0)+'|'+task;if(el._sig!==undefined&&el._sig!==sig){el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash')}el._sig=sig;
  setT(tk,task);tk.title=task;
  const cs=$('.cs',el);if(b.coin&&b.coin.mint){cs.hidden=false;cs.dataset.mint=b.coin.mint;setT(cs,b.coin.sym||short(b.coin.mint))}else cs.hidden=true;
@@ -224,11 +226,11 @@ function updBot(el,b){
  const rs=(r?.reasons?.length?r.reasons.map(reasonDe):r?.risks?.length?[r.risks[0]]:[]).slice(0,2);
  const rh=rs.map(x=>`<li title="${esc(x)}">${esc(x)}</li>`).join('')||`<li style="border-style:dashed;color:#777">${r?'keine Gründe im Log':'keine Begründung vorhanden'}</li>`;if(el._rh!==rh){$('.rs',el).innerHTML=rh;el._rh=rh}
  const mh=(b.metrics||[]).slice(0,3).map(([l,x])=>`<div><small>${esc(l)}</small><b>${esc(publicMetric(l,x))}</b></div>`).join('');if(el._mh!==mh){$('.mt',el).innerHTML=mh;el._mh=mh}$('.mt',el).hidden=!mh;
- setT($('.ago',el),b.lastT&&!PASSIVE_KIND.test(b.actionKind||'')?'Aktion '+ago(b.lastT):b.observedAt?'beobachtet '+ago(Date.parse(b.observedAt)):'keine Aktion');
+ setT($('.ago',el),botAge(b));
  updBotLive(el,b);
 }
 function updBotLive(el,b){const m=b.coin?.mint,d=m&&D.dex[m];setT($('.cp',el),d&&!d.none?px(d.price):'');const c=$('.cc',el);if(d&&!d.none&&d.c5!=null){setT(c,pct(d.c5)+' 5m');c.className='cc mono '+cls(d.c5)}else setT(c,'')}
-function liveBots(){const s=D.snap;if(!s)return;for(const b of s.bots){const el=$(`.bot[data-id="${b.id}"]`);if(!el)continue;const st=botSt(b);el.dataset.st=st[0];setT($('.stt',el),st[1]);setT($('.ago',el),b.lastT?'zuletzt '+ago(b.lastT):'keine Zeitangabe');updBotLive(el,b)}}
+function liveBots(){const s=D.snap;if(!s)return;for(const b of s.bots){const el=$(`.bot[data-id="${b.id}"]`);if(!el)continue;const st=botSt(b);el.dataset.st=st[0];setT($('.stt',el),st[1]);setT($('.ago',el),botAge(b));updBotLive(el,b)}}
 
 /* ---------- Render: Pipeline ---------- */
 let coinEls=[],laneW=0;
@@ -236,7 +238,7 @@ function renderPipe(){
  const s=D.snap,host=$('#pipe');const st=s.stages;
  const key=st.join()+'|'+s.flow.slice(0,5).map(f=>f.mint+f.t).join();
  if(host._k!==key){host._k=key;
-  host.innerHTML=`<div class="nodes">${st.map((n,i)=>`<div class="nd" data-act="stage" data-v="${n}"><div class="ring">${i+1}</div><b>${n}</b><small></small></div>`).join('')}</div><div class="lane">${st.map((n,i)=>`<i class="vl" style="left:${(i+.5)/st.length*100}%"></i>`).join('')}<span class="lnote">${s.flow.length?'':'Keine Signale im Log'}</span></div>`;
+  host.innerHTML=`<div class="nodes">${st.map((n,i)=>`<div class="nd" data-act="stage" data-v="${n}"><div class="ring">${i+1}</div><b>${n}</b><small></small></div>`).join('')}</div><div class="lane">${st.map((n,i)=>`<i class="vl" style="left:${(i+.5)/st.length*100}%"></i>`).join('')}<span class="lnote">${s.flow.length?'':'Pipeline nicht angebunden'}</span></div>`;
   const lane=$('.lane',host);coinEls=s.flow.slice(0,5).map((f,i)=>{const c=document.createElement('div');c.className='cn';c.dataset.act='coin';c.dataset.mint=f.mint;c.textContent=(f.sym||short(f.mint)).slice(0,10);
    c.dataset.tip=`${f.sym} · ${f.verdict||'–'} · Conf ${f.confidence??'–'} · ${f.stop?`gestoppt bei ${f.stop.stage}: ${f.stop.reason.split(', ').map(reasonDe).join(', ')}`:'bis zum Sniper gekommen'} · ${ago(f.t)}`;
    lane.appendChild(c);return{el:c,f,i,w:c.offsetWidth||70,x:false}});measure()}
@@ -323,7 +325,7 @@ let rpts=[],rcv,rctx,rW=0,rH=0,rDpr=1;
 function renderRadarList(){
  const s=D.snap;rpts=s.radar.map(r=>({...r,a:hash(r.mint)*Math.PI*2,rr:Math.max(.12,Math.min(.92,1-(r.prog-s.sniffer.minProgress)/(100-s.sniffer.minProgress)*.8-.08))}));
  setT($('#radSub'),s.sniffer?`${s.sniffer.scanned} gescannt · ${ago(s.sniffer.at)}`:'');
- const h=s.radar.length?s.radar.map(r=>`<button class="rr" data-act="coin" data-mint="${r.mint}"><b>${esc(r.symbol)}</b><span>${nf(r.prog,1)} %</span><span>$${cmp(r.mc)}</span></button>`).join(''):'<div class="empty">Keine Kandidaten über der Schwelle im letzten Lauf.</div>';
+ const h=s.radar.length?s.radar.map(r=>`<button class="rr" data-act="coin" data-mint="${r.mint}"><b>${esc(r.symbol)}</b><span>${nf(r.prog,1)} %</span><span>$${cmp(r.mc)}</span></button>`).join(''):`<div class="empty">${s.sniffer&&s.sniffer.scanned!=null?'Im letzten Lauf keine Kandidaten über der Schwelle.':'Kandidaten nicht verfügbar.'}</div>`;
  const l=$('#rlist');if(l._h!==h){l.innerHTML=h;l._h=h}
 }
 function radarSize(){rcv=$('#radar');if(!rcv)return;rDpr=Math.min(1.5,window.devicePixelRatio||1);rW=rcv.clientWidth;rH=rcv.clientHeight;if(!rW)return;rcv.width=rW*rDpr;rcv.height=rH*rDpr;rctx=rcv.getContext('2d')}
@@ -357,11 +359,13 @@ function drawEcg(dt,now){
 
 /* ---------- System: Chips, Rail, Risiko, Health, Wallets, Quellen ---------- */
 const a1Latest=()=>V4()?.a1?.list?.[0]||null;
+function clarifyTransportChip(){const cb=$('#chipBot');if(!cb)return;const span=$('span',cb);if(!span)return;let t=span.textContent||'';t=t.replace('Bot-Daten LIVE','Export frisch').replace('Bot-Stream LIVE','Stream frisch');setT(span,t);const base=cb.dataset.tip||'';if(!base.includes('nicht, dass alle Bots'))cb.dataset.tip=('Nur der Export oder Stream ist frisch. Das sagt nicht, dass alle Bots aktiv sind. '+base).trim()}
 function renderChips(){
  const n=Date.now(),st=D.stream,s=D.snap;const live=st.url&&st.open&&n-st.lastMsg<25000;
  const cb=$('#chipBot'),gen=s?.generatedAt;
  cb.dataset.s=(live||(D.ghLive&&Date.now()-D.ghLive<180000))?'live':'warn';
- setT($('span',cb),(!live&&D.ghLive&&Date.now()-D.ghLive<180000)?`Bot-Daten LIVE · Update ${ago(D.ghLive)}`:live?`Bot-Stream LIVE · Änderung ${ago(st.lastState||gen)}`:`Bot-Stand ${gen?tmM(gen)+' Uhr (vor '+ago(gen).replace('vor ','')+')':'…'} · ${st.url?'Stream offline':'Snapshot'}`);
+ setT($('span',cb),(!live&&D.ghLive&&Date.now()-D.ghLive<180000)?`Export frisch · ${ago(D.ghLive)}`:live?`Stream frisch · Änderung ${ago(st.lastState||gen)}`:`Bot-Stand ${gen?tmM(gen)+' Uhr (vor '+ago(gen).replace('vor ','')+')':'…'} · ${st.url?'Stream offline':'Snapshot'}`);
+ clarifyTransportChip();
  const cp=$('#chipPx'),b=D.src.bin,wsOk=b.mode==='WebSocket'&&n-b.t<6000,hlOk=D.src.hl.ok&&n-D.src.hl.t<6000&&!wsOk;
  cp.dataset.s=wsOk||hlOk?'live':b.mode==='REST'?'warn':'off';
  setT($('span',cp),wsOk?`Kurse LIVE · Binance WS · ${nf(D.tps,0)}/s`:hlOk?'Kurse LIVE · Hyperliquid WS':b.mode==='REST'?'Kurse · REST alle 2 s':'Kurse verbinden …');
@@ -370,8 +374,8 @@ function renderChips(){
  if(!s)return;
  const a=a1Latest(),ca=$('#chipA1');
  if(!a){ca.dataset.s='off';setT($('span',ca),'A1: keine Daten')}
- else{const fresh=n-a.t<5*60000;ca.dataset.s=fresh?'live':'warn';setT($('span',ca),`${fresh?'A1 analysiert gerade':'A1 zuletzt'}: ${a.symbol||'?'} ${short(a.mint)} · Conf ${a.confidence??'–'} · ${fresh?(a.verdict||''):ago(a.t)}`)}
- const cm=$('#chipMode');cm.dataset.s=s.mode==='PAPER'||s.mode==='LIVE'?'live':'off';setT($('span',cm),s.mode==='PAPER'?'PAPER · simuliert':s.mode==='LIVE'?'LIVE-Handel':'Modus: unbekannt');
+ else{ca.dataset.s='warn';setT($('span',ca),`A1 zuletzt: ${a.symbol||'?'} ${short(a.mint)} · ${ago(a.t)}`)}
+ const cm=$('#chipMode');const liveMode=s.mode==='LIVE'&&s.modeReady===true;const paperMode=s.mode==='PAPER';cm.dataset.s=liveMode||paperMode?'live':'off';setT($('span',cm),liveMode?'LIVE-Handel':paperMode?'PAPER · simuliert':'Modus: unbekannt');
  const h=s.health,ch=$('#chipHealth');ch.dataset.s=!h?'off':h.overall==='ok'?'live':'warn';setT($('span',ch),h?`Health ${h.overall}${h.alerts?` · ${h.alerts} Alarme`:''}`:'Health: keine Daten');
 }
 function renderRail(){
@@ -521,7 +525,7 @@ function bgDraw(now){if(HIDDEN||REDUCED||!P.length)return;if(now-bgT<66)return;b
 function renderNow(){
  const s=D.snap,v=V4(),host=$('#nowTiles');if(!s)return;
  const a=a1Latest(),fresh=a&&Date.now()-a.t<5*60000;
- const t1=a?`<button class="tile" data-act="a1open"><small>Analyse-Bot A1 · ${fresh?'analysiert gerade':'zuletzt analysiert'}</small><div class="tt"><b>${esc(a.symbol||'?')}</b>${vbadge(a.verdict)}<span class="mono sec">Conf ${a.confidence??'–'}</span></div><div class="mono tmint">${esc(a.mint||'')}</div><div class="sec">${tAgo(a.t)} · ${a.reasonCodes.length?esc(a.reasonCodes.map(reasonDe).join(', ')):'keine Blockgründe'}</div><span class="go">A1-Analyse öffnen ›</span></button>`:`<div class="tile"><small>Analyse-Bot A1</small>${NODATA}</div>`;
+ const t1=a?`<button class="tile" data-act="a1open"><small>Analyse-Bot A1 · zuletzt analysiert</small><div class="tt"><b>${esc(a.symbol||'?')}</b>${vbadge(a.verdict)}<span class="mono sec">Conf ${a.confidence??'–'}</span></div><div class="mono tmint">${esc(a.mint||'')}</div><div class="sec">${tAgo(a.t)} · ${a.reasonCodes.length?esc(a.reasonCodes.map(reasonDe).join(', ')):'keine Blockgründe'}</div><span class="go">A1-Analyse öffnen ›</span></button>`:`<div class="tile"><small>Analyse-Bot A1</small>${NODATA}</div>`;
  const c1=v?.scouts.c1[0],c2=v?.scouts.c2[0],c3=v?.scouts.c3;
  const t2=`<button class="tile" data-act="goto" data-v="ana" data-sec="scouts"><small>Scouts · wer sucht was</small><div class="srows"><div><span class="bid">C1</span> ${c1?`<b>${esc(c1.symbol||short(c1.addr||''))}</b> ${esc(c1.aktion||c1.typ||'')}${c1.usd!=null?' $'+Math.round(c1.usd):''} ${tAgo(c1.t)}`:NODATA}</div><div><span class="bid">C2</span> ${c2?`<b>${esc((c2.token||'').replace('$',''))}</b> ${esc(c2.verdict||'')} ${c2.score??''} ${tAgo(c2.t)}`:NODATA}</div><div><span class="bid">C3</span> ${c3?.run?`Lauf ${tAgo(c3.run.t)}: ${c3.run.scanned??'–'} Pairs, <b>${c3.scanNow.length}</b> Kandidaten`:NODATA}</div></div><span class="go">Scan-Listen öffnen ›</span></button>`;
  const f=s.flow[0];
@@ -593,7 +597,7 @@ function a1Tick(){
 
 /* Scouts */
 function scItem(bot,sym,mint,addr,line,t,extra){return `<div class="sci"><div class="sct">${tAgo(t)}<small class="mono">${t?tmS(t):''}</small></div><div class="scm"><div class="scl"><b>${esc(sym||'?')}</b> ${line}</div>${mint?mintBlock(mint):(addr?`<div class="sec small">Adresse (keine Solana-Mint): <span class="mono">${esc(addr)}</span></div>`:NODATA)}${extra||''}</div></div>`}
-function scoutCard(id,title,sub,items,note){const b=botById(id);const [st,stt]=b?botSt(b):['none','–'];return `<section class="panel sccard" data-st="${st}"><div class="ph"><span class="bid">${id}</span><h2>${esc(title)}</h2><span class="sub"><i class="ld"></i>${st==='active'?'scannt aktiv':st==='calm'?'zuletzt ruhig':'inaktiv'} · ${b?.lastT?'Aktion '+ago(b.lastT):'keine Zeit'}</span></div><div class="pbody"><div class="sec small" style="margin-bottom:6px">${sub}</div>${items.length?items.join(''):NODATA}${note?`<div class="sec small" style="margin-top:6px">${note}</div>`:''}</div></section>`}
+function scoutCard(id,title,sub,items,note){const b=botById(id);const [st,stt]=b?botSt(b):['none','–'];return `<section class="panel sccard" data-st="${st}"><div class="ph"><span class="bid">${id}</span><h2>${esc(title)}</h2><span class="sub"><i class="ld"></i>${st==='active'?'scannt aktiv':b?.actionKind==='unverified_history'?'historisch, nicht bestätigt':'inaktiv'} · ${b?botAge(b):'nicht verfügbar'}</span></div><div class="pbody"><div class="sec small" style="margin-bottom:6px">${sub}</div>${items.length?items.join(''):NODATA}${note?`<div class="sec small" style="margin-top:6px">${note}</div>`:''}</div></section>`}
 function renderScouts(){
  const v=V4(),sc=v?.scouts;if(!sc){$('#scNow').innerHTML='<div class="panel pbody">Keine Scout-Daten im Snapshot (alter state.json) – <b>keine Daten</b>.</div>';return}
  const c1=sc.c1.slice(0,2).map(e=>scItem('C1',e.symbol,e.mint,e.addr,`${esc(e.aktion||e.typ||'')}${e.usd!=null?' · $'+Math.round(e.usd):''}${e.supplyPct!=null?' · '+e.supplyPct+' % Supply':''}`,e.t));
@@ -819,12 +823,12 @@ function renderBilanz(){
  const r=tradeReport(s);
  if(!r.real&&!r.paper){
   if(sub)setT(sub,'Keine verifizierten Trade-Daten');
-  const html=`<div class="bzunverified" data-k="unverified"><b>Keine verifizierten Trade-Daten</b><p>Reale und Paper-Ausführungen sind nicht als vollständig geprüft markiert. Historische Steuerzahlen werden nicht als Bot-Ergebnis gezeigt. Eine leere Datei ist keine Null.</p></div>`;
+  const html=`<div class="bzunverified" data-k="unverified"><b>Noch nicht angebunden / keine verifizierten Daten</b><p>Reale und Paper-Ausführungen sind nicht an ein geprüftes Buch angebunden. Historische Steuerzahlen und Freitext mit einer Null sind kein Ergebnis. Eine leere Datei ist keine Null.</p></div>`;
   if(host._h!==html){host.innerHTML=html;host._h=html}
   return;
  }
  if(sub)setT(sub,'Getrennte Bücher · Beobachtet ist nicht die letzte Ausführung');
- const html=`<div class="bzgrid bzsub">${bookCard(r.real,'REAL')}${bookCard(r.paper,'PAPER')}</div><p class="bznote">Nur Bücher mit schemaVersion 1, verified, coverage complete und Quelle unter trading/real bzw. trading/paper. perf und pnlByToken werden nicht angezeigt.</p>`;
+ const html=`<div class="bzgrid bzsub">${bookCard(r.real,'REAL')}${bookCard(r.paper,'PAPER')}</div><p class="bznote">Noch nicht angebunden / keine verifizierten Daten, außer ein Buch ist ausdrücklich bestätigt. schemaVersion oder verified allein sind kein Ergebnis.</p>`;
  if(host._h!==html){host.innerHTML=html;host._h=html}
 }
 
@@ -934,6 +938,7 @@ setInterval(()=>{
  D.tps=D.tickCount;D.tickCount=0;tickN++;
  if(!D.snap)return;
  renderChips();
+ clarifyTransportChip();
  if(tickN%2===0){renderRail();updAgo()}
  a1Tick();drawerTick();CH_D.live();CH_K.live();
  const p=UI.page;

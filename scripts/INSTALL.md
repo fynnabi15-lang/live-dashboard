@@ -4,6 +4,8 @@ Do not resume the paused uploader (PID 401962, SIGSTOP). Do not run `push.py` fo
 
 `peer-map.json` maps all 18 peers. Filename `Main.json` is MAIN and `trades.json` is TRADES. A file is accepted only when its filename (short alias or that peer's UUID) and any `botId` / `uuid` inside the file name the same peer. A trusted UUID found inside an unrelated filename is ignored. The audit fixture omitted some UUIDs because its helper context was narrower; the map here is the full trusted list.
 
+Public tasks are fixed status or result lines. Free-form telemetry summaries stay on the box and are not copied into `state.json`. `trading/backtests/paper-state.json` does not set the trade mode. Mode is `PAPER` or `LIVE` only when `trading/production-mode.json` says that mode and `ready` is true, and the backtest file does not name the other mode. Otherwise mode is unknown.
+
 Raw telemetry files have no `actionKind`. A missing kind is not analysis or a trade and does not set `lastT`. `SCANNING`, `wartend`, `WAITING`, and `monitoring_idle` are status labels only. A summary may be a string or an array of strings. A1 `SCANNING` does not make the last DNUT signal the current target. A completed C3 run file can record a past scan; a peer-reported later run is not invented. Missing MAIN, B1, B3, C1, D2, D3, D4, and TRADES files stay `UNKNOWN`.
 
 ## Command
