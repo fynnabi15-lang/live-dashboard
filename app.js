@@ -23,7 +23,8 @@ const HLN={BONK:['kBONK',1000]};
 const SOL_MINT='So11111111111111111111111111111111111111112';
 
 /* ---------- Zustand ---------- */
-const D={snap:null,t0:Date.now(),px:{},dex:{},dexT:0,wal:{},spark:{},tickCount:0,tps:0,
+const REDUCED=matchMedia('(prefers-reduced-motion:reduce)').matches;let HIDDEN=document.hidden;document.addEventListener('visibilitychange',()=>{HIDDEN=document.hidden});
+const D={snap:null,t0:Date.now(),px:{},dex:{},dexT:0,wal:{},spark:{},tickCount:0,tps:0,ghLive:0,
  src:{bin:{mode:null,t:0,err:null,wsFail:0},hl:{ok:false,t:0},dex:{ok:null,t:0,err:null},sol:{mode:null,t:0},stream:{}},
  stream:{url:null,open:false,lastMsg:0,lastState:0,seq:0,clients:null,fails:0,es:null},stateAt:0,evKeys:new Set(),seen:false,extra:new Set()};
 const UI={drawer:null,page:'ueb',sec:'a1',sc:'C1',a1sel:null,jsel:null,lr:6,kch:{type:'cex',sym:'SOL'}};
@@ -58,6 +59,7 @@ async function pollSnapshot(){
 function applyState(s,from){
  if(!s||!s.bots)return;
  if(D.snap&&from==='snapshot'&&D.stream.lastState&&s.generatedAt<=D.snap.generatedAt)return;
+ if(D.snap&&s.generatedAt===D.snap.generatedAt&&from==='snapshot'){D.stateAt=Date.now();D.ghLive=Date.parse(s.generatedAt)||D.ghLive;renderChips();return}
  const first=!D.snap;D.snap=s;D.stateAt=Date.now();D.stateFrom=from;
  s.coins.forEach(c=>c.mint&&!c.mint.startsWith('0x'));
  let fresh=0;const keys=new Set();
@@ -190,9 +192,9 @@ function renderKpis(){
  const act=s.bots.filter(b=>botSt(b)[0]==='active').length;
  const w=s.wallets.map(x=>D.wal[x.address]?.sol);const wsum=w.some(v=>v!=null)?w.reduce((a,v)=>a+(v||0),0):null;
  const vals=[[act,0,`von ${s.bots.length} Bots`],[s.counts.signals,0,`geblockt ${s.counts.blocked} · MONITOR ${s.counts.monitor}`],[s.radar.length,0,`Sniffer: ${s.sniffer?.scanned??'–'} gescannt (≥${s.sniffer?.minProgress??'–'} %)`],[s.pf.openPositions,0,`Modus ${s.mode}`],[s.paper?.equitySol,3,s.paper?`${s.paper.closed} geschlossen · Netto ${nf(s.paper.netPnlSol,3)} SOL`:''],[wsum,4,wsum==null?'wird geladen …':s.wallets.map(x=>x.label.split('-')[0]+' '+nf(D.wal[x.address]?.sol,3)).join(' · ')]];
- vals.forEach(([v,d,sub],i)=>{const k=KP[i];k.dec=d;setT(k.sub,sub);if(v==null){setT(k.b,'–');k.to=null;return}if(k.to!==v){k.from=k.v??0;k.to=v;k.t0=performance.now()}});
+ vals.forEach(([v,d,sub],i)=>{const k=KP[i];k.dec=d;setT(k.sub,sub);if(v==null){setT(k.b,'–');k.to=null;return}if(k.to!==v){k.from=k.v??0;k.to=v;k.t0=performance.now();k.done=false}});
 }
-function animKpis(now){for(const k of KP){if(k.to==null)continue;const p=Math.min(1,(now-k.t0)/900),e=1-Math.pow(1-p,3);const v=k.from+(k.to-k.from)*e;if(k.v!==v||p<1){k.v=v;setT(k.b,nf(p<1?v:k.to,k.dec))}}}
+function animKpis(now){for(const k of KP){if(k.to==null||k.done)continue;const p=Math.min(1,(now-k.t0)/700),e=1-Math.pow(1-p,3);const v=k.from+(k.to-k.from)*e;k.v=v;setT(k.b,nf(p<1?v:k.to,k.dec));if(p>=1)k.done=true}}
 
 /* ---------- Render: Bots ---------- */
 function botHTML(b){return `<i class="sweep"></i><header><span class="dot"></span><span class="bid">${esc(b.id)}</span><b class="bn"></b><span class="stt"></span></header><p class="task"></p><div class="bcn"><button class="cs" data-act="coin" hidden></button><span class="cp mono"></span><span class="cc mono"></span></div><div class="vd"><span class="badge"></span><span class="conf"><i></i></span><span class="cv mono"></span></div><ul class="rs"></ul><div class="mt"></div><footer><span class="ago mono"></span><span class="more">Details ›</span></footer>`}
@@ -226,10 +228,10 @@ function liveBots(){const s=D.snap;if(!s)return;for(const b of s.bots){const el=
 let coinEls=[],laneW=0;
 function renderPipe(){
  const s=D.snap,host=$('#pipe');const st=s.stages;
- const key=st.join()+'|'+s.flow.slice(0,8).map(f=>f.mint+f.t).join();
+ const key=st.join()+'|'+s.flow.slice(0,5).map(f=>f.mint+f.t).join();
  if(host._k!==key){host._k=key;
   host.innerHTML=`<div class="nodes">${st.map((n,i)=>`<div class="nd" data-act="stage" data-v="${n}"><div class="ring">${i+1}</div><b>${n}</b><small></small></div>`).join('')}</div><div class="lane">${st.map((n,i)=>`<i class="vl" style="left:${(i+.5)/st.length*100}%"></i>`).join('')}<span class="lnote">${s.flow.length?'':'Keine Signale im Log'}</span></div>`;
-  const lane=$('.lane',host);coinEls=s.flow.slice(0,8).map((f,i)=>{const c=document.createElement('div');c.className='cn';c.dataset.act='coin';c.dataset.mint=f.mint;c.textContent=(f.sym||short(f.mint)).slice(0,10);
+  const lane=$('.lane',host);coinEls=s.flow.slice(0,5).map((f,i)=>{const c=document.createElement('div');c.className='cn';c.dataset.act='coin';c.dataset.mint=f.mint;c.textContent=(f.sym||short(f.mint)).slice(0,10);
    c.dataset.tip=`${f.sym} · ${f.verdict||'–'} · Conf ${f.confidence??'–'} · ${f.stop?`gestoppt bei ${f.stop.stage}: ${f.stop.reason.split(', ').map(reasonDe).join(', ')}`:'bis zum Sniper gekommen'} · ${ago(f.t)}`;
    lane.appendChild(c);return{el:c,f,i,w:c.offsetWidth||70,x:false}});measure()}
  $$('.nd',host).forEach((n,i)=>{const g=st[i];const bs=s.bots.filter(b=>b.group===g),act=bs.filter(b=>botSt(b)[0]==='active').length;n.dataset.a=act?1:0;setT($('small',n),`${bs.length} Bot${bs.length===1?'':'s'} · ${act} aktiv`);n.dataset.tip=`${GROUPS[g]?.[1]||g} Klicken springt zu den Bots.`});
@@ -240,22 +242,24 @@ function animPipe(now){
  if(!coinEls.length||!laneW)return;const n=D.snap.stages.length,C=11000,N=coinEls.length;
  coinEls.forEach((c,k)=>{const ph=((now+k*C/N)%C)/C;const xs=(i)=>(i+.5)/n*laneW-9;const xt=xs(Math.max(0,Math.min(n-1,c.f.reached)));let x,op;
   if(ph<.1){x=xs(0);op=ph/.1}else if(ph<.55){x=xs(0)+(xt-xs(0))*ease((ph-.1)/.45);op=1}else if(ph<.86){x=xt;op=1}else{x=xt;op=1-(ph-.86)/.14}
-  const y=5+(k%3)*22;c.el.style.transform=`translate(${Math.max(0,Math.min(laneW-c.w,x))}px,${y}px)`;c.el.style.opacity=op.toFixed(2);
+  const y=8+k*14;c.el.style.transform=`translate(${Math.max(0,Math.min(laneW-c.w,x))}px,${y}px)`;c.el.style.opacity=op.toFixed(2);
   const fresh=k===0&&Date.now()-c.f.t<10*60000;const xx=!!c.f.stop&&ph>=.55;if(xx!==c.x){c.x=xx;c.el.classList.toggle('x',xx)}if(c.fresh!==fresh){c.fresh=fresh;c.el.classList.toggle('fresh',fresh)}});
 }
 
 /* ---------- Kurse: Rail-Panel + Kurse-Seite ---------- */
 const rows={};let memeKey='';
 const addRow=(k,r)=>{(rows[k]||(rows[k]=[])).push(r)};
+const _io=typeof IntersectionObserver==='function'?new IntersectionObserver(es=>{for(const e of es){const r=e.target._row;if(r)r.vis=e.isIntersecting}},{root:null,threshold:0}):null;
+function obsVis(r){if(_io&&r.el){r.el._row=r;_io.observe(r.el)}}
 function buildMini(){
  const host=$('#plist');if(host.children.length)return;
  host.innerHTML=CEX.map(([k,n])=>`<button class="pr" data-act="cex" data-id="${k}" data-k="${k}" data-tip="${esc(n)} – Klick öffnet den Chart"><span class="s"><b>${k}</b><small>${esc(n)}</small></span><span class="p">–</span><canvas class="k" width="152" height="28"></canvas><span class="c">–</span></button>`).join('');
- $$('#plist .pr').forEach(el=>addRow(el.dataset.k,{el,p:$('.p',el),c:$('.c',el),cv:$('.k',el),lp:null,lf:0}));
+ $$('#plist .pr').forEach(el=>{const r={el,p:$('.p',el),c:$('.c',el),cv:$('.k',el),lp:null,lf:0,vis:true};addRow(el.dataset.k,r);obsVis(r)});
 }
 function buildKcards(){
  const host=$('#kcards');if(host.children.length)return;
  host.innerHTML=CEX.map(([k,n])=>`<button class="kc" data-act="ksel" data-type="cex" data-id="${k}" data-k="${k}"><header><b>${k}</b><small>${esc(n)}</small><span class="c mono">–</span></header><div class="p mono">–</div><canvas class="k" width="300" height="52"></canvas><div class="kx"><span>Hoch <b data-x="h">–</b></span><span>Tief <b data-x="l">–</b></span><span>Vol. <b data-x="q">–</b></span></div></button>`).join('');
- $$('#kcards .kc').forEach(el=>addRow(el.dataset.k,{el,p:$('.p',el),c:$('.c',el),cv:$('.k',el),lp:null,lf:0,card:true,h:$('[data-x=h]',el),l:$('[data-x=l]',el),q:$('[data-x=q]',el)}));
+ $$('#kcards .kc').forEach(el=>{const r={el,p:$('.p',el),c:$('.c',el),cv:$('.k',el),lp:null,lf:0,card:true,vis:true,h:$('[data-x=h]',el),l:$('[data-x=l]',el),q:$('[data-x=q]',el)};addRow(el.dataset.k,r);obsVis(r)});
 CEX.forEach(([k])=>dirty.add(k));markK();
 }
 function markK(){$$('#kcards .kc').forEach(e=>e.classList.toggle('sel',UI.kch.type==='cex'&&UI.kch.sym===e.dataset.id));$$('#mtab tbody tr').forEach(e=>e.classList.toggle('sel',UI.kch.type==='dex'&&UI.kch.mint===e.dataset.id))}
@@ -276,19 +280,25 @@ function updMemes(){
  setT($('#mSub'),`${n} von ${$$('#mtab tbody tr').length} bei DexScreener gefunden · ${D.src.dex.ok?'alle 5 s · '+ago(D.src.dex.t):'–'}`);
 }
 function rowVals(k){const q=D.px[k];return q?{p:q.p,ch:q.ch,dir:q.dir}:{}}
+let pxFlushAt=0;
 function flushPx(now){
+ if(!dirty.size)return;
+ // Max ~8 DOM-Updates/s – WS-Ticks puffern in D.px, sichtbarer Text nur getaktet
+ if(now-pxFlushAt<120)return;pxFlushAt=now;
  for(const k of dirty){const rs=rows[k];if(!rs){dirty.delete(k);continue}const v=rowVals(k),q=D.px[k]||{};
   for(const r of rs){
-   if(v.p!=null&&v.p!==r.lp){setT(r.p,px(v.p));if(r.lp!=null&&now-r.lf>120){r.lf=now;const c=v.p>r.lp?'fu':'fd';r.el.classList.remove('fu','fd');void r.el.offsetWidth;r.el.classList.add(c)}r.lp=v.p}
-   if(v.ch!=null){setT(r.c,pct(v.ch));r.c.className='c mono '+cls(v.ch)}
+   if(!r.el.isConnected)continue;
+   if(v.p!=null&&v.p!==r.lp){setT(r.p,px(v.p));if(r.lp!=null&&now-r.lf>280){r.lf=now;const c=v.p>r.lp?'fu':'fd';r.el.classList.remove('fu','fd');r.el.classList.add(c)}r.lp=v.p}
+   if(v.ch!=null){const t=pct(v.ch);if(r.c.textContent!==t){r.c.textContent=t;r.c.className=(r.card?'c mono ':'c ')+cls(v.ch)}}
    if(r.card){setT(r.h,px(q.h));setT(r.l,px(q.l));setT(r.q,q.q!=null?'$'+cmp(q.q):'–')}}
   dirty.delete(k)}
 }
 function drawSparks(){
- for(const k in rows){const a=D.spark[k];if(!a||a.length<2)continue;let mn=Math.min(...a),mx=Math.max(...a);if(mx===mn){mx+=1e-9;mn-=1e-9}
-  for(const r of rows[k]){const cv=r.cv;if(!cv||!cv.offsetParent)continue;const x=cv.getContext('2d'),w=cv.width,h=cv.height;x.clearRect(0,0,w,h);x.beginPath();a.forEach((v,i)=>{const X=i/(a.length-1)*(w-2)+1,Y=h-3-(v-mn)/(mx-mn)*(h-6);i?x.lineTo(X,Y):x.moveTo(X,Y)});x.strokeStyle='rgba(255,255,255,.85)';x.lineWidth=1.5;x.stroke()}}
+ if(HIDDEN)return;
+ for(const k in rows){const a=D.spark[k];if(!a||a.length<2)continue;let mn=a[0],mx=a[0];for(let i=1;i<a.length;i++){const v=a[i];if(v<mn)mn=v;if(v>mx)mx=v}if(mx===mn){mx+=1e-9;mn-=1e-9}
+  for(const r of rows[k]){const cv=r.cv;if(!cv||!r.vis)continue;const x=cv.getContext('2d'),w=cv.width,h=cv.height;x.clearRect(0,0,w,h);x.beginPath();for(let i=0;i<a.length;i++){const X=i/(a.length-1)*(w-2)+1,Y=h-3-(a[i]-mn)/(mx-mn)*(h-6);i?x.lineTo(X,Y):x.moveTo(X,Y)}x.strokeStyle='rgba(255,255,255,.75)';x.lineWidth=1.25;x.stroke()}}
 }
-setInterval(()=>{for(const [k] of CEX){const p=D.px[k]?.p;if(p!=null){const a=D.spark[k]||(D.spark[k]=[]);a.push(p);if(a.length>90)a.shift()}}drawSparks()},1000);
+setInterval(()=>{if(HIDDEN)return;for(const [k] of CEX){const p=D.px[k]?.p;if(p!=null){const a=D.spark[k]||(D.spark[k]=[]);a.push(p);if(a.length>48)a.shift()}}drawSparks()},2000);
 
 /* ---------- Render: Feed ---------- */
 const feedMap=new Map();
@@ -310,12 +320,14 @@ function renderRadarList(){
  const h=s.radar.length?s.radar.map(r=>`<button class="rr" data-act="coin" data-mint="${r.mint}"><b>${esc(r.symbol)}</b><span>${nf(r.prog,1)} %</span><span>$${cmp(r.mc)}</span></button>`).join(''):'<div class="empty">Keine Kandidaten über der Schwelle im letzten Lauf.</div>';
  const l=$('#rlist');if(l._h!==h){l.innerHTML=h;l._h=h}
 }
-function radarSize(){rcv=$('#radar');rDpr=Math.min(2,window.devicePixelRatio||1);rW=rcv.clientWidth;rH=rcv.clientHeight;rcv.width=rW*rDpr;rcv.height=rH*rDpr;rctx=rcv.getContext('2d')}
+function radarSize(){rcv=$('#radar');if(!rcv)return;rDpr=Math.min(1.5,window.devicePixelRatio||1);rW=rcv.clientWidth;rH=rcv.clientHeight;if(!rW)return;rcv.width=rW*rDpr;rcv.height=rH*rDpr;rctx=rcv.getContext('2d')}
 let rHover=null;
+let rDrawAt=0;
 function drawRadar(now){
- if(!rctx||!rW||!rcv.offsetParent)return;const x=rctx;x.setTransform(rDpr,0,0,rDpr,0,0);x.clearRect(0,0,rW,rH);const cx=rW/2,cy=rH/2,R=Math.min(rW,rH)/2-8;
- x.strokeStyle='rgba(255,255,255,.16)';x.lineWidth=1;[.25,.5,.75,1].forEach(f=>{x.beginPath();x.arc(cx,cy,R*f,0,7);x.stroke()});x.beginPath();x.moveTo(cx-R,cy);x.lineTo(cx+R,cy);x.moveTo(cx,cy-R);x.lineTo(cx,cy+R);x.stroke();
- const ang=(now/6000)%1*Math.PI*2;for(let i=0;i<28;i++){const a=ang-i*.035;x.strokeStyle=`rgba(255,255,255,${.5*(1-i/28)})`;x.beginPath();x.moveTo(cx,cy);x.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);x.stroke()}
+ if(!rctx||!rW||HIDDEN||UI.page!=='ana'||UI.sec!=='scouts')return;if(now-rDrawAt<80)return;rDrawAt=now;
+ const x=rctx;x.setTransform(rDpr,0,0,rDpr,0,0);x.clearRect(0,0,rW,rH);const cx=rW/2,cy=rH/2,R=Math.min(rW,rH)/2-8;
+ x.strokeStyle='rgba(255,255,255,.14)';x.lineWidth=1;[.33,.66,1].forEach(f=>{x.beginPath();x.arc(cx,cy,R*f,0,7);x.stroke()});x.beginPath();x.moveTo(cx-R,cy);x.lineTo(cx+R,cy);x.moveTo(cx,cy-R);x.lineTo(cx,cy+R);x.stroke();
+ const ang=(now/6000)%1*Math.PI*2;for(let i=0;i<12;i++){const a=ang-i*.05;x.strokeStyle=`rgba(255,255,255,${.45*(1-i/12)})`;x.beginPath();x.moveTo(cx,cy);x.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);x.stroke()}
  x.fillStyle='#fff';x.beginPath();x.arc(cx,cy,2.5,0,7);x.fill();
  x.font='10px ui-monospace,monospace';
  for(const p of rpts){let d=((ang-p.a)%(Math.PI*2)+Math.PI*2)%(Math.PI*2);const glow=Math.max(0,1-d/2.2);const X=cx+Math.cos(p.a)*p.rr*R,Y=cy+Math.sin(p.a)*p.rr*R;p.x=X;p.y=Y;
@@ -327,12 +339,14 @@ function drawRadar(now){
 
 /* ---------- System-Herzschlag (EKG) ---------- */
 let ecg,ecgX,ecgBuf=[],ecgQ=[],ecgAcc=0;
-function ecgSize(){ecg=$('#ecg');const d=Math.min(2,devicePixelRatio||1);ecg.width=ecg.clientWidth*d;ecg.height=46*d;ecgX=ecg.getContext('2d');ecgX.setTransform(d,0,0,d,0,0);const n=ecg.clientWidth;while(ecgBuf.length<n)ecgBuf.unshift(0);ecgBuf=ecgBuf.slice(-n)}
+let ecgW=0,ecgDrawAt=0;
+function ecgSize(){ecg=$('#ecg');if(!ecg)return;const d=Math.min(1.5,devicePixelRatio||1);ecgW=ecg.clientWidth||0;if(!ecgW)return;ecg.width=ecgW*d;ecg.height=46*d;ecgX=ecg.getContext('2d');ecgX.setTransform(d,0,0,d,0,0);while(ecgBuf.length<ecgW)ecgBuf.unshift(0);ecgBuf=ecgBuf.slice(-ecgW)}
 function ecgKick(a){if(ecgQ.length>60)return;[0,.15,-.1,.9,-.8,.25,0,.12,.05,0].forEach(v=>{ecgQ.push(v*a,v*a,v*a)})}
-function drawEcg(dt){
- if(!ecgX||!ecg.offsetParent)return;ecgAcc+=dt*55;while(ecgAcc>=1){ecgAcc--;ecgBuf.shift();ecgBuf.push(ecgQ.length?ecgQ.shift():0)}
- const w=ecg.clientWidth,h=46,x=ecgX;x.clearRect(0,0,w,h);x.beginPath();ecgBuf.forEach((v,i)=>{const Y=h/2-v*(h/2-4);i?x.lineTo(i,Y):x.moveTo(i,Y)});x.strokeStyle='rgba(255,255,255,.18)';x.lineWidth=5;x.stroke();x.strokeStyle='#fff';x.lineWidth=1.3;x.stroke();
- x.fillStyle='#fff';x.beginPath();x.arc(w-2,h/2-ecgBuf[w-1]*(h/2-4),2.5,0,7);x.fill();
+function drawEcg(dt,now){
+ if(!ecgX||HIDDEN||!ecgW)return;if(now&&now-ecgDrawAt<32)return;ecgDrawAt=now||performance.now();
+ ecgAcc+=dt*55;while(ecgAcc>=1){ecgAcc--;ecgBuf.shift();ecgBuf.push(ecgQ.length?ecgQ.shift():0)}
+ const w=ecgW,h=46,x=ecgX;x.clearRect(0,0,w,h);x.beginPath();for(let i=0;i<ecgBuf.length;i++){const Y=h/2-ecgBuf[i]*(h/2-4);i?x.lineTo(i,Y):x.moveTo(i,Y)}x.strokeStyle='rgba(255,255,255,.16)';x.lineWidth=4;x.stroke();x.strokeStyle='#fff';x.lineWidth=1.2;x.stroke();
+ x.fillStyle='#fff';x.beginPath();x.arc(w-2,h/2-ecgBuf[w-1]*(h/2-4),2.2,0,7);x.fill();
 }
 
 /* ---------- System: Chips, Rail, Risiko, Health, Wallets, Quellen ---------- */
@@ -427,7 +441,7 @@ function cexDrawer(k){
  <div class="sec2"><h4>24-Stunden-Werte</h4><div class="kvs" id="cexkv"></div></div>`]}
 function openDrawer(type,id,noHash){
  if(!D.snap)return;if(type==='coin')D.extra.add(id);UI.drawer={type,id};
- let r;if(type==='bot'){const b=botById(id);if(!b)return;r=botDrawer(b);UI.drawer.sig=JSON.stringify(b)}else if(type==='coin')r=coinDrawer(id);else r=cexDrawer(id);
+ let r;if(type==='bot'){const b=botById(id);if(!b)return;r=botDrawer(b);UI.drawer.sig=b.lastT+'|'+b.task+'|'+(b.reasoning&&b.reasoning.verdict)}else if(type==='coin')r=coinDrawer(id);else r=cexDrawer(id);
  CH_D.destroy();$('#dtitle').textContent=r[0];$('#dbody').innerHTML=r[1];$('#dbody').scrollTop=0;
  $('#drawer').hidden=false;$('#veil').hidden=false;document.body.style.overflow='hidden';
  $$('.dnav [data-act=prev],.dnav [data-act=next]').forEach(b=>b.style.visibility=type==='bot'?'visible':'hidden');
@@ -438,7 +452,7 @@ function closeDrawer(){UI.drawer=null;$('#drawer').hidden=true;$('#veil').hidden
 function stepBot(d){if(UI.drawer?.type!=='bot')return;const a=D.snap.bots,i=a.findIndex(b=>b.id===UI.drawer.id);openDrawer('bot',a[(i+d+a.length)%a.length].id)}
 function drawerTick(){
  const u=UI.drawer;if(!u||!D.snap)return;
- if(u.type==='bot'){const b=botById(u.id);if(b){const sig=JSON.stringify(b);if(sig!==u.sig){const r=botDrawer(b);const top=$('#dbody').scrollTop;$('#dbody').innerHTML=r[1];$('#dbody').scrollTop=top;u.sig=sig}}return}
+ if(u.type==='bot'){const b=botById(u.id);if(b){const sig=b.lastT+'|'+b.task+'|'+(b.reasoning&&b.reasoning.verdict);if(sig!==u.sig){const r=botDrawer(b);const top=$('#dbody').scrollTop;$('#dbody').innerHTML=r[1];$('#dbody').scrollTop=top;u.sig=sig}}return}
  const set=(k,t,c)=>{const e=$(`[data-lv="${k}"]`);if(e){setT(e,t);if(c!=null)e.className='mono '+c}};
  if(u.type==='coin'){const d=D.dex[u.id];if(d&&!d.none){set('p',px(d.price));set('c1',pct(d.c1)+' (1 Std)',cls(d.c1));const h=$('#coinkv'),H=[['5 Min',pct(d.c5)],['1 Std',pct(d.c1)],['6 Std',pct(d.c6)],['24 Std',pct(d.c24)],['Liquidität','$'+cmp(d.liq)],['Market Cap','$'+cmp(d.mc)],['Vol. 5 Min','$'+cmp(d.v5)],['Vol. 1 Std','$'+cmp(d.v1)],['Vol. 24 Std','$'+cmp(d.v24)],['Txns 24 Std',d.tx?`${d.tx.buys} K / ${d.tx.sells} V`:'–'],['Alter',d.created?ago(d.created).replace('vor ',''):'–'],['DEX',d.dex||'–']].map(([l,v])=>kv(l,esc(v))).join('');if(h&&h._h!==H){h.innerHTML=H;h._h=H}}else if(d&&d.none)set('p','nicht bei DexScreener gefunden')}
  if(u.type==='cex'){const q=D.px[u.id]||{};set('p',px(q.p));set('ch',pct(q.ch)+' (24 Std)',cls(q.ch));setT($('[data-lv=src]'),q.src?'Quelle: '+q.src+(q.pt?' · letzter Tick '+ago(q.pt):''):'');const h=$('#cexkv'),H=[['24h Hoch',px(q.h)],['24h Tief',px(q.l)],['24h Eröffnung',px(q.o)],['24h Volumen','$'+cmp(q.q)]].map(([l,v])=>kv(l,esc(v))).join('');if(h&&h._h!==H){h.innerHTML=H;h._h=H}}
@@ -491,11 +505,11 @@ function showTip(el,x,y,text){const t=text||el?.dataset.tip;if(!t)return;tipEl.t
 document.addEventListener('pointerover',e=>{if(e.pointerType==='touch')return;const el=e.target.closest?.('[data-tip]');clearTimeout(tipT);if(!el){tipEl.hidden=true;return}tipT=setTimeout(()=>showTip(el,e.clientX,e.clientY),280)});
 document.addEventListener('pointerdown',()=>{tipEl.hidden=true;clearTimeout(tipT)});
 document.addEventListener('scroll',()=>{tipEl.hidden=true},true);
+document.addEventListener('animationend',e=>{if(e.animationName==='fu'||e.animationName==='fd')e.target.classList.remove('fu','fd')});
 
 const bgc=$('#bg'),bx=bgc.getContext('2d');let P=[],bgW=0,bgH=0,bgT=0;
-function bgInit(){const d=Math.min(1.5,devicePixelRatio||1);bgW=innerWidth;bgH=innerHeight;bgc.width=bgW*d;bgc.height=bgH*d;bx.setTransform(d,0,0,d,0,0);const n=Math.min(70,Math.floor(bgW*bgH/22000));P=Array.from({length:n},()=>({x:Math.random()*bgW,y:Math.random()*bgH,vx:(Math.random()-.5)*.25,vy:(Math.random()-.5)*.25,r:Math.random()*1.2+.3}))}
-function bgDraw(now){if(now-bgT<33)return;bgT=now;bx.clearRect(0,0,bgW,bgH);for(const p of P){p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=bgW;if(p.x>bgW)p.x=0;if(p.y<0)p.y=bgH;if(p.y>bgH)p.y=0;bx.fillStyle='rgba(255,255,255,.55)';bx.fillRect(p.x,p.y,p.r,p.r)}
- bx.lineWidth=.6;for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++){const dx=P[i].x-P[j].x,dy=P[i].y-P[j].y,d=dx*dx+dy*dy;if(d<9000){bx.strokeStyle=`rgba(255,255,255,${.16*(1-d/9000)})`;bx.beginPath();bx.moveTo(P[i].x,P[i].y);bx.lineTo(P[j].x,P[j].y);bx.stroke()}}}
+function bgInit(){const d=Math.min(1.25,devicePixelRatio||1);bgW=innerWidth;bgH=innerHeight;bgc.width=bgW*d;bgc.height=bgH*d;bx.setTransform(d,0,0,d,0,0);const n=REDUCED?0:Math.min(28,Math.floor(bgW*bgH/45000));P=Array.from({length:n},()=>({x:Math.random()*bgW,y:Math.random()*bgH,vx:(Math.random()-.5)*.12,vy:(Math.random()-.5)*.12,r:Math.random()*1.1+.25}))}
+function bgDraw(now){if(HIDDEN||REDUCED||!P.length)return;if(now-bgT<66)return;bgT=now;bx.clearRect(0,0,bgW,bgH);bx.fillStyle='rgba(255,255,255,.4)';for(const p of P){p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=bgW;if(p.x>bgW)p.x=0;if(p.y<0)p.y=bgH;if(p.y>bgH)p.y=0;bx.fillRect(p.x,p.y,p.r,p.r)}}
 
 /* ================= Seite 1 · Übersicht ================= */
 function renderNow(){
@@ -515,7 +529,7 @@ const LANES=['C1','C2','C3','A1','A2','A3','A4','A5','D2','D4'];
 let lcv,lctx,lW=0,lH=0,lpts=[],lT=0,lHover=null;
 function laneSize(){lcv=$('#laneCv');if(!lcv||!lcv.offsetParent)return;const d=Math.min(2,devicePixelRatio||1);lW=lcv.parentElement.clientWidth;lH=LANES.length*30+28;lcv.style.height=lH+'px';lcv.width=lW*d;lcv.height=lH*d;lctx=lcv.getContext('2d');lctx.setTransform(d,0,0,d,0,0);lT=0}
 function drawLanes(now){
- if(!lctx||!D.snap||!lW||!lcv.offsetParent||now-lT<120)return;lT=now;
+ if(!lctx||!D.snap||!lW||HIDDEN||UI.page!=='ueb'||now-lT<200)return;lT=now;
  const lanes=V4()?.lanes||{},x=lctx;x.clearRect(0,0,lW,lH);
  const range=UI.lr*3600e3,t1=Date.now(),t0=t1-range,narrow=lW<560,L=narrow?92:178,R=12,top=22,rh=30;const X=t=>L+(t-t0)/range*(lW-L-R);
  x.font='10.5px ui-monospace,Menlo,monospace';x.textBaseline='middle';
@@ -682,10 +696,12 @@ function setHash(){const p=PAGES[UI.page][0];let h='#'+p;if(UI.page==='ana'&&UI.
 const PERF={frames:0,slow:0,max:0,start:performance.now(),lastF:0};window.__perf=PERF;
 let lastNow=0;
 function loop(now){
+ requestAnimationFrame(loop);
+ if(HIDDEN){lastNow=now;return}
  const dt=lastNow?Math.min(.1,(now-lastNow)/1000):0;lastNow=now;
  if(PERF.lastF){const f=now-PERF.lastF;PERF.frames++;if(f>50)PERF.slow++;if(f>PERF.max)PERF.max=f}PERF.lastF=now;
- if(D.snap){const p=UI.page;if(p==='ueb'){animKpis(now);animPipe(now);drawLanes(now)}flushPx(now);if(p==='ana'&&UI.sec==='scouts')drawRadar(now);drawEcg(dt)}
- bgDraw(now);requestAnimationFrame(loop);
+ if(D.snap){const p=UI.page;if(p==='ueb'){animKpis(now);if(!REDUCED)animPipe(now);drawLanes(now)}flushPx(now);if(p==='ana'&&UI.sec==='scouts')drawRadar(now);if(p!=='kurse')drawEcg(dt,now)}
+ bgDraw(now);
 }
 function renderAll(first){
  renderChips();renderRail();buildMini();
@@ -756,14 +772,18 @@ addEventListener('resize',()=>{measure();radarSize();ecgSize();laneSize();bgInit
 addEventListener('error',e=>console.warn('JS-Fehler:',e.message));
 
 /* ---------- Takt-Timer ---------- */
+let tickN=0;
 setInterval(()=>{
+ if(HIDDEN){D.tickCount=0;return}
  const n=Date.now();setT($('#clock'),tmS(n));const s=Math.floor((n-D.t0)/1000);setT($('#session'),[s/3600|0,s/60%60|0,s%60].map(x=>String(x).padStart(2,'0')).join(':'));
- D.tps=D.tickCount;D.tickCount=0;
+ D.tps=D.tickCount;D.tickCount=0;tickN++;
  if(!D.snap)return;
- renderChips();renderRail();updAgo();a1Tick();drawerTick();CH_D.live();CH_K.live();
+ renderChips();
+ if(tickN%2===0){renderRail();updAgo()}
+ a1Tick();drawerTick();CH_D.live();CH_K.live();
  const p=UI.page;
- if(p==='ueb'){renderKpis();renderNow();$$('#pipe .nd').forEach((nd,i)=>{const g=D.snap.stages[i],act=D.snap.bots.filter(b=>b.group===g&&botSt(b)[0]==='active').length;nd.dataset.a=act?1:0})}
- else if(p==='bots'){liveBots();renderWallets();renderSrcs();renderHealth()}
+ if(p==='ueb'){renderKpis();if(tickN%2===0)renderNow();$$('#pipe .nd').forEach((nd,i)=>{const g=D.snap.stages[i],act=D.snap.bots.filter(b=>b.group===g&&botSt(b)[0]==='active').length;const v=act?1:0;if(+nd.dataset.a!==v)nd.dataset.a=v})}
+ else if(p==='bots'){liveBots();renderWallets();if(tickN%3===0){renderSrcs();renderHealth()}}
  else if(p==='kurse')updMemes();
  else if(p==='ana'&&UI.sec==='scouts')setT($('#radSub'),D.snap.sniffer?`${D.snap.sniffer.scanned} gescannt · ${ago(D.snap.sniffer.at)}`:'');
 },1000);
