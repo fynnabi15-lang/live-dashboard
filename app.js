@@ -85,7 +85,7 @@ async function pollSnapshot(){
  if(!streamLive){
   const got=await pullRemote();
   if(got){const prev=D.stateSrc;D.stateSrc=got.src;if(applyState(got.s,'snapshot')){D.ghLive=Date.parse(got.s.generatedAt)||Date.now();D.src.liveErr=null;ecgKick(.8)}else D.stateSrc=prev;delay=got.src==='api'?API_GAP:RAW_GAP}
-  else{if(!D.snap)await loadBundled();delay=RAW_GAP}
+  else{if(!D.snap)await loadBundled();else renderChips();delay=RAW_GAP}
  }
  pollTimer=setTimeout(pollSnapshot,delay);
 }
@@ -391,13 +391,26 @@ function drawEcg(dt,now){
 
 /* ---------- System: Chips, Rail, Risiko, Health, Wallets, Quellen ---------- */
 const a1Latest=()=>V4()?.a1?.list?.[0]||null;
+const BOT_FRESH_MS=10*60*1000,BOT_FUTURE_MS=2*60*1000;
+function botFresh(gen,now=Date.now()){const t=Date.parse(gen);if(!Number.isFinite(t))return false;if(t>now+BOT_FUTURE_MS)return false;return now-t<=BOT_FRESH_MS}
+function botStand(gen){const t=Date.parse(gen);return Number.isFinite(t)?tmM(t)+' Uhr':'–'}
+function botFeed(now=Date.now()){
+ const s=D.snap,gen=s?.generatedAt,st=D.stream;
+ const remote=D.stateSrc==='api'||D.stateSrc==='raw';
+ const socket=!!(st.url&&st.open&&now-st.lastMsg<25000);
+ const fresh=botFresh(gen,now)&&!D.src.liveErr&&(remote||socket);
+ if(socket&&fresh)return {live:true,text:`Bot-Stream LIVE · Änderung ${ago(st.lastState||gen)}`,tip:'Bot-Stream ist verbunden.'};
+ if(fresh)return {live:true,text:`Bot-Daten LIVE · ${botStand(gen)} (${ago(gen)})`,tip:D.stateSrc==='api'?'Öffentliche GitHub-API, höchstens einmal pro Minute.':'raw.githubusercontent.com, Branch data. Kein API-Limit.'};
+ if(D.src.liveErr&&s&&(remote||socket))return {live:false,text:`Bot-Stand ${botStand(gen)} · Aktualisierung unterbrochen`,tip:'Letzter Stand bleibt sichtbar. Der Live-Abruf antwortet gerade nicht.'};
+ if(remote||socket)return {live:false,text:`Bot-Stand ${botStand(gen)} · veraltet`,tip:'Zeitstempel fehlt, liegt mehr als 2 Minuten in der Zukunft oder ist älter als 10 Minuten.'};
+ return {live:false,text:`Bot-Stand ${Number.isFinite(Date.parse(gen)) ? botStand(gen) : '…'} · Snapshot`,tip:'Mitgelieferte state.json. Der Live-Abruf ist gerade nicht erreichbar.'};
+}
 function renderChips(){
- const n=Date.now(),st=D.stream,s=D.snap;const live=st.url&&st.open&&n-st.lastMsg<25000;
- const cb=$('#chipBot'),gen=s?.generatedAt,remote=D.stateSrc==='api'||D.stateSrc==='raw';
- const age=gen?Date.now()-Date.parse(gen):Infinity;
- cb.dataset.s=live||(remote&&age<10*60*1000)?'live':'warn';
- cb.dataset.tip=live?'Bot-Stream ist verbunden.':remote?(D.stateSrc==='api'?'Öffentliche GitHub-API, höchstens einmal pro Minute.':'raw.githubusercontent.com, Branch data. Kein API-Limit.'):'Mitgelieferte state.json. Der Live-Abruf ist gerade nicht erreichbar.';
- setT($('span',cb),live?`Bot-Stream LIVE · Änderung ${ago(st.lastState||gen)}`:remote&&gen?`Bot-Daten LIVE · ${tmM(gen)} Uhr (${ago(gen)})`:`Bot-Stand ${gen?tmM(gen)+' Uhr':'…'} · Snapshot`);
+ const n=Date.now(),s=D.snap;
+ const feed=botFeed(n),cb=$('#chipBot');
+ cb.dataset.s=feed.live?'live':'warn';
+ cb.dataset.tip=feed.tip;
+ setT($('span',cb),feed.text);
  const cp=$('#chipPx'),b=D.src.bin,wsOk=b.mode==='WebSocket'&&n-b.t<6000,hlOk=D.src.hl.ok&&n-D.src.hl.t<6000&&!wsOk;
  cp.dataset.s=wsOk||hlOk?'live':b.mode==='REST'?'warn':'off';
  setT($('span',cp),wsOk?`Kurse LIVE · Binance WS · ${nf(D.tps,0)}/s`:hlOk?'Kurse LIVE · Hyperliquid WS':b.mode==='REST'?'Kurse · REST alle 2 s':'Kurse verbinden …');
@@ -436,7 +449,7 @@ function renderWallets(){
 function renderSrcs(){
  const s=D.snap,st=D.stream,n=Date.now();const live=st.open&&n-st.lastMsg<25000;
  const L=[['Bot-Stream',st.url?(live?'live':'warn'):'off',st.url?(live?`verbunden · Ping ${ago(st.lastMsg)}`:'getrennt → Snapshot'):'nicht konfiguriert'],
- ['Bot-Snapshot',D.stateSrc==='file'||!D.snap?'warn':'live',D.snap?`Stand ${tmM(D.snap.generatedAt)} · ${D.stateSrc==='api'?'GitHub-API':D.stateSrc==='raw'?'raw-Branch':D.stateSrc==='file'?'lokale Datei':'Stream'}`:'–'],
+ ['Bot-Snapshot',botFeed(n).live?'live':'warn',(()=>{const f=botFeed(n);if(!s)return '–';const name=D.stateSrc==='api'?'GitHub-API':D.stateSrc==='raw'?'raw-Branch':D.stateSrc==='file'?'lokale Datei':'Stream';if(f.live)return `Stand ${botStand(s.generatedAt)} · ${name}`;return f.text})()],
  ['Binance',D.src.bin.mode==='WebSocket'&&n-D.src.bin.t<6000?'live':D.src.bin.mode==='REST'?'warn':'off',D.src.bin.mode==='WebSocket'&&n-D.src.bin.t<6000?'WebSocket · '+(D.src.bin.host||''):D.src.bin.mode==='REST'?'REST alle 2 s':D.src.bin.err?'nicht erreichbar':'verbinde …'],
  ['Hyperliquid',D.src.hl.ok&&n-D.src.hl.t<8000?'live':'off',D.src.hl.ok&&n-D.src.hl.t<8000?'WebSocket (Reserve)':'getrennt'],
  ['DexScreener',D.src.dex.ok?'live':D.src.dex.ok===false?'warn':'off',D.src.dex.ok?'alle 5 s · '+ago(D.src.dex.t):D.src.dex.err||'–'],
